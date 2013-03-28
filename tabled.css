@@ -1,0 +1,73 @@
+.tabled {
+  box-shadow: inset 0 1px 0 0 black;
+}
+.tabled .tr {
+  width: 100%;
+  height: 2em;
+  box-shadow: inset -1px -1px 0 0 #000000, inset 1px 0 0 #000000;
+}
+.tabled .tr .th,
+.tabled .tr .td {
+  display: inline-block;
+  overflow: hidden;
+  position: relative;
+  height: 2em;
+  box-shadow: inset -1px 0 0 0 #000000;
+}
+.tabled .tr .cell-inner {
+  line-height: 2em;
+  padding: 0 5px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  white-space: nowrap;
+}
+.tabled .tr .cell-inner.filter {
+  white-space: normal;
+}
+.tabled input.filter {
+  width: 100%;
+  max-width: 200px;
+}
+.tabled .th {
+  position: relative;
+  cursor: -webkit-grab;
+  cursor: -moz-grab;
+  /*		padding-left:11px;*/
+
+}
+.tabled .th .resize {
+  display: block;
+  border-width: 0 1px 0 1px;
+  border-color: #CCC;
+  border-style: solid;
+  width: 3px;
+  height: 100%;
+  position: absolute;
+  right: 1px;
+  top: 0;
+  cursor: col-resize;
+}
+.tabled .th.asc,
+.tabled .th.desc {
+  font-style: italic;
+}
+.tabled .th .asc-icon,
+.tabled .th .desc-icon {
+  background-image: url('tabled_icons.png');
+  width: 10px;
+  height: 8px;
+  display: inline-block;
+}
+.tabled .th .asc-icon {
+  background-position: 0px 0px;
+}
+.tabled .th .asc-icon.white {
+  background-position: 0px -8px;
+}
+.tabled .th .desc-icon {
+  background-position: -10px 0px;
+}
+.tabled .th .desc-icon.white {
+  background-position: -10px -8px;
+}

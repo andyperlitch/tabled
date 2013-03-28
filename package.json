@@ -1,0 +1,36 @@
+{
+    "name": "tabled",
+    "version": "0.0.0",
+    "description": "Backbone UI component for building interactive tables.",
+    "main": "index.js",
+    "scripts": {
+        "test": "mocha test/*.js"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git@github.com:andyperlitch/tabled.git"
+    },
+    "keywords": [
+        "backbone",
+        "ui",
+        "table"
+    ],
+    "author": "andy perlitch",
+    "license": "BSD",
+    "readmeFilename": "README.md",
+    "devDependencies": {
+        "mocha": "",
+        "sinon": "",
+        "beefy": ""
+    },
+    "dependencies": {
+        "browserify": ">=2.8.0"
+    },
+    "jam": {
+        "packageDir": "./examples/vendor",
+        "dependencies": {
+            "backbone":"",
+            "jquery":""
+        }
+    }
+}
