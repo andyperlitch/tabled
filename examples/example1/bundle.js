@@ -41,6 +41,12 @@ var table = new Tabled({
 }).render();
 
 },{"../../":2}],2:[function(require,module,exports){
+var Tabled = Backbone.View.extend({
+    
+    
+    
+});
 
+exports = module.exports = Tabled
 },{}]},{},[1])
 ;

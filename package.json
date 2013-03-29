@@ -27,7 +27,7 @@
         "browserify": ">=2.8.0"
     },
     "jam": {
-        "packageDir": "./examples/vendor",
+        "packageDir": "./vendor",
         "dependencies": {
             "backbone":"",
             "jquery":""
