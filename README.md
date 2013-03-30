@@ -41,9 +41,23 @@ The id of this table instance. Used to store information about the table in loca
 `Boolean` Set to `false` if you'd like the table not to have an adjustable width.
 
 
-###`save_width` (default: `false`)
+###`save_state` (default: `false`)
 
-`Boolean` Saves the width of the table each time the user adjusts it. The result is the table being capable of saving state between sessions.
+`Boolean` Saves the state of the table each time the user changes it. This means that column and row sort orders and widths of the columns will be saved between sessions.
+
+
+###`table_width` (default: `'auto'`)
+
+`Int` or `String` Set an explicit default width in pixels for this table. If this is set to `'auto'` (the default value) the table will be rendered at the available width inside of its container. 
+
+WARNING: If the table is hidden on initialization, a `table_width` of `'auto'` will result in a width of 0, in which case the table will automatically be rendered with a width of [number of columns] * [min width of columns]. 
+
+Also note that you cannot set a width to something less than the sum of the minimum column widths (the width will simply be calculated as if the width was 0 as noted earlier).
+
+
+###`min_column_width` (default: 20)
+
+`Int` The default minimum column width in pixels that any one column can be. This can be overridden on a per-column basis by setting the same key on the column object.
 
 
 ##Columns
