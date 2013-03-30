@@ -14,7 +14,6 @@ var tabled = new Tabled({
     columns: columns,
     el: document.getElementById("table-target")
 }).render();
-
 },{"../../":2}],2:[function(require,module,exports){
 var BaseView = require('./lib/BaseView');
 var Column = require('./lib/Column').model;
@@ -56,7 +55,17 @@ var Tabled = BaseView.extend({
         this.listenTo(this.columns, "change:width", this.adjustInner );
     },
     
-    template: '<div class="tabled-ctnr"><div class="tabled-inner"><div class="tabled"><div class="thead"></div><div class="tbody"></div></div></div></div>',
+    template: [
+        '<div class="tabled-ctnr"><div class="tabled-inner">',
+        '<div class="tabled">',
+        '<div class="thead"></div>',
+        '<div class="tbody"></div>',
+        '<div class="resize-table">',
+        '<div class="resize-grip"></div><div class="resize-grip"></div><div class="resize-grip"></div>',
+        '</div>',
+        '</div>',
+        '</div></div>'
+    ].join(""),
     
     render: function() {
         // Set initial markup
@@ -103,7 +112,7 @@ var Tabled = BaseView.extend({
             adjustedWidth += width;
         });
         this.currentWidth = adjustedWidth;
-        this.$el.width(adjustedWidth);
+        // this.$el.width(adjustedWidth);
     },
     
     adjustInner: function() {
@@ -112,8 +121,30 @@ var Tabled = BaseView.extend({
             return memo*1 + width*1;
         }, 0);
         this.$('.tabled-inner').width(width);
-    }
+    },
     
+    events: {
+        'mousedown .resize-table': 'grabTableResizer'
+    },
+    
+    grabTableResizer: function(evt){
+        evt.preventDefault();
+        evt.stopPropagation();
+        var self = this;
+        var mouseX = evt.clientX;
+        var table_resize = function(evt){
+            var change = (evt.clientX - mouseX)/self.columns.length;
+            self.columns.each(function(column){
+                column.set({"width":column.get("width")*1+change}, {validate:true});
+            })
+        } 
+        var cleanup_resize = function(evt) {
+            $(window).off("mousemove", table_resize);
+        }
+        
+        $(window).on("mousemove", table_resize);
+        $(window).one("mouseup", cleanup_resize);
+    }
 });
 
 exports = module.exports = Tabled
@@ -157,8 +188,7 @@ var Column = Backbone.Model.extend({
     },
     
     validate: function(attrs) {
-        console.log("testing");
-        if (attrs.width <= attrs.min_column_width) return "A column width cannot be => 0";
+        if (attrs.width < attrs.min_column_width) return "A column width cannot be => 0";
     }
     
 });
@@ -204,6 +234,11 @@ var ThCell = BaseView.extend({
         return this;
     },
     
+    events: {
+        "mousedown .resize": "grabResizer",
+        "dblclick .resize": "fitToContent"
+    },
+    
     grabResizer: function(evt) {
         evt.preventDefault();
         evt.stopPropagation();
@@ -226,8 +261,14 @@ var ThCell = BaseView.extend({
         $(window).one("mouseup", cleanup_resize);
     },
     
-    events: {
-        "mousedown .resize": "grabResizer"
+    fitToContent: function(evt) {
+        var new_width = 0;
+        var min_width = this.model.get('min_column_width');
+        var id = this.model.get('id');
+        $(".td.col-"+id+" .cell-inner").each(function(i, el){
+            new_width = Math.max(new_width,$(this).outerWidth(true), min_width);
+        });
+        this.model.set({'width':new_width},{validate: true});
     }
     
 });

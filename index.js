@@ -38,7 +38,17 @@ var Tabled = BaseView.extend({
         this.listenTo(this.columns, "change:width", this.adjustInner );
     },
     
-    template: '<div class="tabled-ctnr"><div class="tabled-inner"><div class="tabled"><div class="thead"></div><div class="tbody"></div></div></div></div>',
+    template: [
+        '<div class="tabled-ctnr"><div class="tabled-inner">',
+        '<div class="tabled">',
+        '<div class="thead"></div>',
+        '<div class="tbody"></div>',
+        '<div class="resize-table">',
+        '<div class="resize-grip"></div><div class="resize-grip"></div><div class="resize-grip"></div>',
+        '</div>',
+        '</div>',
+        '</div></div>'
+    ].join(""),
     
     render: function() {
         // Set initial markup
@@ -85,7 +95,7 @@ var Tabled = BaseView.extend({
             adjustedWidth += width;
         });
         this.currentWidth = adjustedWidth;
-        this.$el.width(adjustedWidth);
+        // this.$el.width(adjustedWidth);
     },
     
     adjustInner: function() {
@@ -94,8 +104,30 @@ var Tabled = BaseView.extend({
             return memo*1 + width*1;
         }, 0);
         this.$('.tabled-inner').width(width);
-    }
+    },
     
+    events: {
+        'mousedown .resize-table': 'grabTableResizer'
+    },
+    
+    grabTableResizer: function(evt){
+        evt.preventDefault();
+        evt.stopPropagation();
+        var self = this;
+        var mouseX = evt.clientX;
+        var table_resize = function(evt){
+            var change = (evt.clientX - mouseX)/self.columns.length;
+            self.columns.each(function(column){
+                column.set({"width":column.get("width")*1+change}, {validate:true});
+            })
+        } 
+        var cleanup_resize = function(evt) {
+            $(window).off("mousemove", table_resize);
+        }
+        
+        $(window).on("mousemove", table_resize);
+        $(window).one("mouseup", cleanup_resize);
+    }
 });
 
 exports = module.exports = Tabled

@@ -121,17 +121,40 @@ describe("the Tabled module", function() {
             })
         });
         
+        it("colums should resize to content on dblclick", function() {
+            var dblclick = $.Event("dblclick");
+            var column = this.tabled.columns.get("name");
+            var expected_width = 0;
+            $(".td.col-name .cell-inner").each(function(i, el){
+                expected_width = Math.max(expected_width, $(this).outerWidth(true), column.get('min_column_width'));
+            });
+            
+            $(".th.col-name .resize").trigger(dblclick);
+            assert.equal(column.get('width'), expected_width, "The column does not have the right width");
+        });
+        
         it("shouldn't allow columns to have a width of less than their min-width", function() {
             var column = this.tabled.columns.at(0);
             column.set( {'width': 0} , {validate: true} );
             assert(column.get('width') != 0, 'validation did not stop setting a bad width value');
         });
         
+        it("should be resizable by the .resize-table element", function() {
+            var table = $(".tabled", this.$pg);
+            var old = table.width();
+            var resizer = $(".resize-table", this.$pg);
+            assert(resizer, "table resizer should exist");
+            var mousedownEvt = $.Event("mousedown", {clientX: 0});
+            var mousemoveEvt = $.Event("mousemove", {clientX: 10});
+            resizer.trigger(mousedownEvt);
+            $(window).trigger(mousemoveEvt);
+            $(window).trigger('mouseup');
+            assert.equal(old + 10, table.width(), "should have changed widths");
+        })
+        
         afterEach(function() {
             this.tabled.remove();
         });
         
     });
-    
-    
 })
