@@ -106,18 +106,27 @@ This function defines the ascending order, and the descending order is defined b
 - `formatted_row_value`: the value outputted by the format function, if there. If there is no format function, this will be the same as `raw_row_value`
 - `row_model`: the model that the filter is being applied to
 
+This function should return true if the row should be included in the filtered set, and false if it should not be.
+
+
 ###`format` (optional)
 
-`Function` Returns a string, DOM element, or jQuery object to be used as the value of the row. Receives the value of `model.get(column.key)` and the model itself as arguments:
+`Function` or `String` If a function, it should return a string, DOM element, or jQuery object to be used as the value of the row. Receives the value of `model.get(column.key)` and the model itself as arguments:
 
     format: function(value, model) {
         // return something here
         // note: under the hood, this value is added with $().append()
     }
 
-###`select` (optional)
+If it is a string, it should be one of the predefined formatting functions:
+####`'select'`
 
-`Boolean` If the `select` key is set to true on a column, the cells in that column will be checkboxes that, when checked or unchecked, will emit "tabled:select" and "tabled:deselect" events on the model in the collection whose row was clicked. Also, when the selected group changes, the Tabled instance itself will emit a "tabled:select_change" event with an array of selected models as the first argument and the data collection itself.
+The cells in that column will be checkboxes that, when checked or unchecked, will change the value of the `key` on the model to true or false, respectively. This will then emit appropriate change events on the model and collection of data. Consider the following column definition object:
+
+    // ...in column definitions...
+    { id: "selector", select: true, key: "selected" , label: "" }
+    
+Each row of data will have a column with a checkbox, and when one is clicked, the model's `selected` attribute will be changed to true (or false if unchecking), eg. model.set('selected', true);
 
 ##Examples
 

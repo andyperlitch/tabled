@@ -157,4 +157,78 @@ describe("the Tabled module", function() {
         });
         
     });
+    
+    describe("an advanced tabled view", function() {
+        this.timeout(500);
+        beforeEach(function(){
+            this.Tabled = require('../');
+            
+            function inches2feet(inches, model){
+                var feet = Math.floor(inches/12);
+                var inches = inches % 12;
+                return feet + "'" + inches + '"';
+            }
+            
+            function feet_filter(term, value, formatted, model) {
+                if (term == "tall") return value > 70;
+                if (term == "short") return value < 69;
+                return true;
+            }
+            
+            this.columns = [
+                { id: "selector", key: "selected", label: "", select: true },
+                { id: "first_name", key: "first_name", label: "First Name", sort: "string", filter: "like",  },
+                { id: "last_name", key: "last_name", label: "Last Name", sort: "string", filter: "like",  },
+                { id: "age", key: "age", label: "Age", sort: "number", filter: "number" },
+                { id: "height", key: "height", label: "Height", format: inches2feet, filter: feet_filter }
+            ];
+            this.collection = new Backbone.Collection([
+                { id: 1, first_name: "andy",  last_name: "perlitch", age: 24 , height: 69, selected: false },
+                { id: 2, first_name: "scott", last_name: "perlitch", age: 26 , height: 71, selected: false },
+                { id: 3, first_name: "tevya", last_name: "robbins", age: 32  , height: 68, selected: true }
+            ]);
+            this.tabled = new this.Tabled({
+                collection: this.collection,
+                columns: this.columns,
+                table_width: 500
+            });
+            this.$pg = $("#playground");
+            this.tabled.render().$el.appendTo(this.$pg);
+        });
+        
+        it("should have a filter row with filter inputs", function() {
+            assert.equal( $('.filter-row input').length, 4, "filter row not there or not enough filter inputs" );
+        });
+        
+        it("should have checkboxes in the select column", function(){
+            assert.equal(3, $('.col-selector input[type="checkbox"]').length, "wrong number of checkboxes found");
+        });
+        
+        it("should render already selected rows as checked", function() {
+            assert($('.col-selector input[type="checkbox"]:eq(2)').is(":checked"), "initially selected row was not checked");
+        });
+        
+        it("should emit events when a checkbox is clicked", function(done) {
+            this.collection.once("change:selected", function(model, value) {
+                assert(this.collection.get(model) !== undefined, "model that changed was not in the collection");
+                done();
+            }, this);
+            $('.col-selector input[type="checkbox"]:eq(0)').trigger('click');
+        });
+        
+        it("should allow default filters", function(){
+            $('.filter-row input:eq(1)').val('perli').trigger('keyup');
+            assert.equal($(".tbody .tr").length, 2, "did not filter the rows down to 2");
+        });
+        
+        it("should allow custom filters", function(){
+            $('.filter-row input:eq(3)').val('tall').trigger('keyup');
+            assert.equal($(".tbody .tr").length, 1, "did not filter the rows down to 1");
+        });
+        
+        afterEach(function(){
+            this.tabled.remove();
+        });
+        
+    })
 })

@@ -132,10 +132,14 @@ var Tabled = BaseView.extend({
         evt.stopPropagation();
         var self = this;
         var mouseX = evt.clientX;
+        var col_state = this.columns.reduce(function(memo, column, index){
+            memo[column.get('id')] = column.get('width');
+            return memo;
+        },{},this);
         var table_resize = function(evt){
             var change = (evt.clientX - mouseX)/self.columns.length;
             self.columns.each(function(column){
-                column.set({"width":column.get("width")*1+change}, {validate:true});
+                column.set({"width":col_state[column.get("id")]*1+change}, {validate:true});
             })
         } 
         var cleanup_resize = function(evt) {
@@ -148,7 +152,7 @@ var Tabled = BaseView.extend({
 });
 
 exports = module.exports = Tabled
-},{"./lib/BaseView":3,"./lib/Column":4,"./lib/Thead":5,"./lib/Tbody":6}],3:[function(require,module,exports){
+},{"./lib/Column":3,"./lib/BaseView":4,"./lib/Thead":5,"./lib/Tbody":6}],4:[function(require,module,exports){
 var BaseView = Backbone.View.extend({
     
     // Assigns a subview to a jquery selector in this view's el
@@ -170,7 +174,10 @@ var BaseView = Backbone.View.extend({
 });
 
 exports = module.exports = BaseView
-},{}],4:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
+var Filters = require("./Filters");
+var Sorts = require("./Sorts");
+var Formats = require("./Formats");
 var Column = Backbone.Model.extend({
     
     defaults: {
@@ -181,6 +188,27 @@ var Column = Backbone.Model.extend({
         filter: undefined,
         format: undefined,
         select: false
+    },
+    
+    initialize: function() {
+        // Check for filter
+        var filter = this.get("filter");
+        if (typeof filter === "string" && Filters.hasOwnProperty(filter)) {
+            this.set("filter", Filters[filter]);
+        }
+        
+        // Check for sort
+        var sort = this.get("sort");
+        if (typeof sort === "string" && Sorts.hasOwnProperty(sort)) {
+            this.set("sort", Sorts[sort]);
+        }
+        
+        // Check for format
+        var select = this.get('select');
+        if (select) {
+            this.set("format", Formats.select );
+            this.set("select_key", this.get("key"));
+        }
     },
     
     serialize: function() {
@@ -212,7 +240,7 @@ var Columns = Backbone.Collection.extend({
 
 exports.model = Column;
 exports.collection = Columns;
-},{}],5:[function(require,module,exports){
+},{"./Sorts":7,"./Filters":8,"./Formats":9}],5:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var ThCell = BaseView.extend({
@@ -291,18 +319,41 @@ var ThRow = BaseView.extend({
 
 var FilterCell = BaseView.extend({
     
+    template: '<div class="cell-inner"><input class="filter" type="search" placeholder="filter" /></div>',
+    
+    render: function() {
+        var fn = this.model.get('filter');
+        var markup = typeof fn === "function" ? this.template : "" ;
+        this.$el.addClass('col-'+this.model.get('id')).width(this.model.get('width'));
+        this.$el.html(markup);
+        return this;
+    }
+    
 });
 
 var FilterRow = BaseView.extend({
     
-    
+    render: function() {
+        // clear it
+        this.$el.empty();
+        
+        // render each th cell
+        this.collection.each(function(column){
+            var view = new FilterCell({ model: column });
+            this.$el.append( view.render().el )
+        }, this);
+        return this;
+    }
     
 });
+
 var Thead = BaseView.extend({
     
     initialize: function(options) {
         this.th_row     = new ThRow({ collection: this.collection });
-        if (this.needsFilterRow()) this.filter_row = new FilterRow({ collection: this.collection });
+        if (this.needsFilterRow()) {
+            this.filter_row = new FilterRow({ collection: this.collection });
+        }
     },
     
     template: '<div class="tr th-row"></div><div class="tr filter-row"></div>',
@@ -318,14 +369,14 @@ var Thead = BaseView.extend({
     needsFilterRow: function() {
         var needs_it = false;
         this.collection.each(function(column){
-            if (typeof column.get('filter') === 'function') needs_it = true;
+            if (typeof column.get('filter') !== 'undefined') needs_it = true;
         });
         return needs_it;
     }
     
 });
 exports = module.exports = Thead;
-},{"./BaseView":3}],6:[function(require,module,exports){
+},{"./BaseView":4}],6:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var Tdata = BaseView.extend({
@@ -403,5 +454,55 @@ var Tbody = BaseView.extend({
     
 });
 exports = module.exports = Tbody;
-},{"./BaseView":3}]},{},[1])
+},{"./BaseView":4}],7:[function(require,module,exports){
+exports.number = function(row1,row2) { 
+    return row1[field]*1 - row2[field]*1;
+}
+exports.string = function(row1,row2) { 
+    if ( row1[field].toString().toLowerCase() == row2[field].toString().toLowerCase() ) return 0;
+    return row1[field].toString().toLowerCase() > row2[field].toString().toLowerCase() ? 1 : -1 ;
+}
+},{}],8:[function(require,module,exports){
+exports.like = function(term, value, computedValue, row) {
+    term = term.toLowerCase();
+    value = value.toLowerCase();
+    return value.indexOf(term) > -1;
+}
+exports.is = function(term, value, computedValue, row) {
+    term = term.toLowerCase();
+    value = value.toLowerCase();
+    return term == value;
+}
+exports.number = function(term, value) {
+    value *= 1;
+    var first_two = term.substr(0,2);
+    var first_char = term[0];
+    var against_1 = term.substr(1)*1;
+    var against_2 = term.substr(2)*1;
+    if ( first_two == "<=" ) return value <= against_2 ;
+    if ( first_two == ">=" ) return value >= against_2 ;
+    if ( first_char == "<" ) return value < against_1 ;
+    if ( first_char == ">" ) return value > against_1 ;
+    if ( first_char == "~" ) return Math.round(value) == against_1 ;
+    if ( first_char == "=" ) return against_1 == value ;
+    return value.toString().indexOf(term.toString()) > -1 ;
+}
+},{}],9:[function(require,module,exports){
+exports.select = function(value, model) {
+    var select_key = model.get('select_key') || 'selected';
+    var checked = !! model.get(select_key);
+    var $ret = $('<div class="cell-inner"><input type="checkbox"></div>');
+    
+    // Set checked
+    var $cb = $ret.find('input').prop('checked', true);
+    
+    // Set click behavior
+    $cb.on('click', function(evt) {
+        if ($cb.is(":checked")) console.log("checked");
+        else console.log("not checked");
+    })
+    
+    return $ret;
+}
+},{}]},{},[1])
 ;

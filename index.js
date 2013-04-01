@@ -115,10 +115,14 @@ var Tabled = BaseView.extend({
         evt.stopPropagation();
         var self = this;
         var mouseX = evt.clientX;
+        var col_state = this.columns.reduce(function(memo, column, index){
+            memo[column.get('id')] = column.get('width');
+            return memo;
+        },{},this);
         var table_resize = function(evt){
             var change = (evt.clientX - mouseX)/self.columns.length;
             self.columns.each(function(column){
-                column.set({"width":column.get("width")*1+change}, {validate:true});
+                column.set({"width":col_state[column.get("id")]*1+change}, {validate:true});
             })
         } 
         var cleanup_resize = function(evt) {
