@@ -36,6 +36,7 @@ var Tabled = BaseView.extend({
         
         // Listeners
         this.listenTo(this.columns, "change:width", this.adjustInner );
+        this.listenTo(this.columns, "change:filter_value", this.renderBody);
     },
     
     template: [
@@ -61,6 +62,18 @@ var Tabled = BaseView.extend({
             '.tbody': this.tbody
         })
         return this;
+    },
+    
+    renderBody: function(){
+        this.assign({
+            '.tbody': this.tbody
+        });
+    },
+    
+    renderHead: function(){
+        this.assign({
+            '.thead': this.thead
+        });
     },
     
     setWidths: function() {

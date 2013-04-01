@@ -31,6 +31,10 @@
 .tabled .tr .cell-inner.filter {
   white-space: normal;
 }
+.tabled .tr.filter-row .cell-inner {
+  width: 86%;
+  padding: 0 7%;
+}
 .tabled input.filter {
   width: 100%;
   max-width: 200px;

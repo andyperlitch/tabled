@@ -13,7 +13,7 @@ function feet_filter(term, value, formatted, model) {
 }
 
 var columns = [
-    { id: "selector", key: "selected", label: "", select: true },
+    { id: "selector", key: "selected", label: "", select: true, width: 30 },
     { id: "first_name", key: "first_name", label: "First Name", sort: "string", filter: "like",  },
     { id: "last_name", key: "last_name", label: "Last Name", sort: "string", filter: "like",  },
     { id: "age", key: "age", label: "Age", sort: "number", filter: "number" },

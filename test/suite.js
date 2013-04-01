@@ -217,13 +217,17 @@ describe("the Tabled module", function() {
         });
         
         it("should allow default filters", function(){
-            $('.filter-row input:eq(1)').val('perli').trigger('keyup');
+            $('.filter-row input:eq(1)').val('perli').trigger('click');
             assert.equal($(".tbody .tr").length, 2, "did not filter the rows down to 2");
         });
         
         it("should allow custom filters", function(){
-            $('.filter-row input:eq(3)').val('tall').trigger('keyup');
+            $('.filter-row input:eq(3)').val('tall').trigger('click');
             assert.equal($(".tbody .tr").length, 1, "did not filter the rows down to 1");
+        });
+        
+        it("should allow default sorting", function(){
+            
         });
         
         afterEach(function(){

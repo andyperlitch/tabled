@@ -1,19 +1,37 @@
 ;(function(e,t,n){function i(n,s){if(!t[n]){if(!e[n]){var o=typeof require=="function"&&require;if(!s&&o)return o(n,!0);if(r)return r(n,!0);throw new Error("Cannot find module '"+n+"'")}var u=t[n]={exports:{}};e[n][0](function(t){var r=e[n][1][t];return i(r?r:t)},u,u.exports)}return t[n].exports}var r=typeof require=="function"&&require;for(var s=0;s<n.length;s++)i(n[s]);return i})({1:[function(require,module,exports){
 var Tabled = require('../../');
+
+function inches2feet(inches, model){
+    var feet = Math.floor(inches/12);
+    var inches = inches % 12;
+    return feet + "'" + inches + '"';
+}
+
+function feet_filter(term, value, formatted, model) {
+    if (term == "tall") return value > 70;
+    if (term == "short") return value < 69;
+    return true;
+}
+
 var columns = [
-    { id: "name", key: "name", label: "Name" },
-    { id: "age", key: "age", label: "Age" }
-]
+    { id: "selector", key: "selected", label: "", select: true, width: 30 },
+    { id: "first_name", key: "first_name", label: "First Name", sort: "string", filter: "like",  },
+    { id: "last_name", key: "last_name", label: "Last Name", sort: "string", filter: "like",  },
+    { id: "age", key: "age", label: "Age", sort: "number", filter: "number" },
+    { id: "height", key: "height", label: "Height", format: inches2feet, filter: feet_filter }
+];
 var collection = new Backbone.Collection([
-    { name: "andy", age: 24 },
-    { name: "scott", age: 26 },
-    { name: "tevya", age: 32 }
+    { id: 1, first_name: "andy",  last_name: "perlitch", age: 24 , height: 69, selected: false },
+    { id: 2, first_name: "scott", last_name: "perlitch", age: 26 , height: 71, selected: false },
+    { id: 3, first_name: "tevya", last_name: "robbins", age: 32  , height: 68, selected: true }
 ]);
 var tabled = new Tabled({
     collection: collection,
     columns: columns,
-    el: document.getElementById("table-target")
-}).render();
+    table_width: 500
+});
+var $pg = $("#playground");
+tabled.render().$el.appendTo($pg);
 },{"../../":2}],2:[function(require,module,exports){
 var BaseView = require('./lib/BaseView');
 var Column = require('./lib/Column').model;
@@ -187,7 +205,86 @@ var BaseView = Backbone.View.extend({
 });
 
 exports = module.exports = BaseView
-},{}],5:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
+var Filters = require("./Filters");
+var Sorts = require("./Sorts");
+var Formats = require("./Formats");
+var Column = Backbone.Model.extend({
+    
+    defaults: {
+        id: "",
+        key: "",
+        label: "",
+        sort: undefined,
+        filter: undefined,
+        format: undefined,
+        select: false,
+        filter_value: "",
+        sort_value: ""
+    },
+    
+    initialize: function() {
+        // Check for filter
+        var filter = this.get("filter");
+        if (typeof filter === "string" && Filters.hasOwnProperty(filter)) {
+            this.set("filter", Filters[filter]);
+        }
+        
+        // Check for sort
+        var sort = this.get("sort");
+        if (typeof sort === "string" && Sorts.hasOwnProperty(sort)) {
+            this.set("sort", Sorts[sort]);
+        }
+        
+        // Check for format
+        var select = this.get('select');
+        if (select) {
+            this.set("format", Formats.select );
+            this.set("select_key", this.get("key"));
+        }
+    },
+    
+    serialize: function() {
+        return this.toJSON();
+    },
+    
+    validate: function(attrs) {
+        if (attrs.width < attrs.min_column_width) return "A column width cannot be => 0";
+    },
+    
+    getKey: function(model) {
+        return model.get(this.get('key'));
+    },
+    
+    getFormatted: function(model) {
+        var fn = this.get('format');
+        return (typeof fn === "function")
+            ? fn(this.getKey(model), model)
+            : this.getKey(model);
+    }
+    
+});
+
+var Columns = Backbone.Collection.extend({
+    
+    initialize: function(models, options) {
+        this.options = options;
+        _.each(models, this.setMinWidth, this);
+    },
+    
+    setMinWidth: function(model) {
+        if (model.hasOwnProperty('min_column_width')) return;
+        
+        model['min_column_width'] = this.options.min_column_width;
+    },
+    
+    model: Column
+    
+});
+
+exports.model = Column;
+exports.collection = Columns;
+},{"./Filters":7,"./Sorts":8,"./Formats":9}],5:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var ThCell = BaseView.extend({
@@ -344,86 +441,7 @@ var Thead = BaseView.extend({
     
 });
 exports = module.exports = Thead;
-},{"./BaseView":3}],4:[function(require,module,exports){
-var Filters = require("./Filters");
-var Sorts = require("./Sorts");
-var Formats = require("./Formats");
-var Column = Backbone.Model.extend({
-    
-    defaults: {
-        id: "",
-        key: "",
-        label: "",
-        sort: undefined,
-        filter: undefined,
-        format: undefined,
-        select: false,
-        filter_value: "",
-        sort_value: ""
-    },
-    
-    initialize: function() {
-        // Check for filter
-        var filter = this.get("filter");
-        if (typeof filter === "string" && Filters.hasOwnProperty(filter)) {
-            this.set("filter", Filters[filter]);
-        }
-        
-        // Check for sort
-        var sort = this.get("sort");
-        if (typeof sort === "string" && Sorts.hasOwnProperty(sort)) {
-            this.set("sort", Sorts[sort]);
-        }
-        
-        // Check for format
-        var select = this.get('select');
-        if (select) {
-            this.set("format", Formats.select );
-            this.set("select_key", this.get("key"));
-        }
-    },
-    
-    serialize: function() {
-        return this.toJSON();
-    },
-    
-    validate: function(attrs) {
-        if (attrs.width < attrs.min_column_width) return "A column width cannot be => 0";
-    },
-    
-    getKey: function(model) {
-        return model.get(this.get('key'));
-    },
-    
-    getFormatted: function(model) {
-        var fn = this.get('format');
-        return (typeof fn === "function")
-            ? fn(this.getKey(model), model)
-            : this.getKey(model);
-    }
-    
-});
-
-var Columns = Backbone.Collection.extend({
-    
-    initialize: function(models, options) {
-        this.options = options;
-        _.each(models, this.setMinWidth, this);
-    },
-    
-    setMinWidth: function(model) {
-        if (model.hasOwnProperty('min_column_width')) return;
-        
-        model['min_column_width'] = this.options.min_column_width;
-    },
-    
-    model: Column
-    
-});
-
-exports.model = Column;
-exports.collection = Columns;
-},{"./Filters":7,"./Sorts":8,"./Formats":9}],6:[function(require,module,exports){
+},{"./BaseView":3}],6:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var Tdata = BaseView.extend({

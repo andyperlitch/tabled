@@ -912,27 +912,27 @@ EventEmitter.prototype.listeners = function(type) {
 var assert = require('assert');
 describe("the Tabled module", function() {
     
-    beforeEach(function() {
-        this.Tabled = require('../');
-        this.columns = [
-            { id: "name", key: "name", label: "Name" },
-            { id: "age", key: "age", label: "Age" }
-        ]
-        this.collection = new Backbone.Collection([
-            { name: "andy", age: 24 },
-            { name: "scott", age: 26 },
-            { name: "tevya", age: 32 }
-        ]);
-        this.tabled = new this.Tabled({
-            collection: this.collection,
-            columns: this.columns,
-            table_width: 500
-        });
-        this.$pg = $("#playground");
-        this.tabled.render().$el.appendTo(this.$pg);
-    });
-    
     describe("a simple tabled view", function() {
+        
+        beforeEach(function() {
+            this.Tabled = require('../');
+            this.columns = [
+                { id: "name", key: "name", label: "Name" },
+                { id: "age", key: "age", label: "Age" }
+            ]
+            this.collection = new Backbone.Collection([
+                { name: "andy", age: 24 },
+                { name: "scott", age: 26 },
+                { name: "tevya", age: 32 }
+            ]);
+            this.tabled = new this.Tabled({
+                collection: this.collection,
+                columns: this.columns,
+                table_width: 500
+            });
+            this.$pg = $("#playground");
+            this.tabled.render().$el.appendTo(this.$pg);
+        });
         
         it("should be a backbone view", function() {
             assert(this.tabled instanceof Backbone.View, "was not a backbone view");
@@ -945,6 +945,12 @@ describe("the Tabled module", function() {
         
         it("should make the columns list into a Backbone.Collection", function() {
             assert(this.tabled.columns instanceof Backbone.Collection, "tabled.columns was not a backbone collection");
+        });
+        
+        it("should set a min column width on all columns", function() {
+            this.tabled.columns.each(function(column){
+                assert(column.get('min_column_width'), "A column did not have a min_column_width");
+            })
         });
         
         it("should render .tabled, .thead, and .tbody element", function() {
@@ -971,6 +977,13 @@ describe("the Tabled module", function() {
         it("should have columns*rows number of td's", function() {
             assert.equal( $(".tbody .td", this.$pg).length, this.collection.length * this.tabled.columns.length, "table does not have the right amount of td's");
         });
+        
+        it("should store all widths in the columns", function() {
+            this.tabled.columns.each(function(column){
+                assert(column.get('width') != undefined);
+                assert(typeof column.get('width') !== "undefined" );
+            })
+        })
         
         it("should add col-[id] classes to each row", function() {
             var ids = this.tabled.columns.pluck('id');
@@ -1001,12 +1014,138 @@ describe("the Tabled module", function() {
             assert.equal( $('.filter-row', this.$pg ).length, 0 , "There is a filter row even though no columns have a filter");
         });
         
+        it("should have size-adjustable columns", function() {
+            var resizer = $('.resize:eq(0)', this.$pg);
+            assert(resizer, "resizers should exist");
+            var column = this.tabled.columns.at(0);
+            var old_width = column.get('width');
+            var mousedownEvt = $.Event("mousedown", {clientX: 0});
+            var mousemoveEvt = $.Event("mousemove", {clientX: 10});
+            resizer.trigger(mousedownEvt);
+            $(window).trigger(mousemoveEvt);
+            $(window).trigger("mouseup");
+            assert(old_width != column.get('width'), "width of column object did not change");
+            
+            var new_width = column.get("width");
+            $('.td-name', this.$pg).each(function(i,el){
+                assert.equal(new_width, $(this).width(), "all cells of adjusted column are not the same size");
+            })
+        });
+        
+        it("colums should resize to content on dblclick", function() {
+            var dblclick = $.Event("dblclick");
+            var column = this.tabled.columns.get("name");
+            var expected_width = 0;
+            $(".td.col-name .cell-inner").each(function(i, el){
+                expected_width = Math.max(expected_width, $(this).outerWidth(true), column.get('min_column_width'));
+            });
+            
+            $(".th.col-name .resize").trigger(dblclick);
+            assert.equal(column.get('width'), expected_width, "The column does not have the right width");
+        });
+        
+        it("shouldn't allow columns to have a width of less than their min-width", function() {
+            var column = this.tabled.columns.at(0);
+            column.set( {'width': 0} , {validate: true} );
+            assert(column.get('width') != 0, 'validation did not stop setting a bad width value');
+        });
+        
+        it("should be resizable by the .resize-table element", function() {
+            var table = $(".tabled", this.$pg);
+            var old = table.width();
+            var resizer = $(".resize-table", this.$pg);
+            assert(resizer, "table resizer should exist");
+            var mousedownEvt = $.Event("mousedown", {clientX: 0});
+            var mousemoveEvt = $.Event("mousemove", {clientX: 10});
+            resizer.trigger(mousedownEvt);
+            $(window).trigger(mousemoveEvt);
+            $(window).trigger('mouseup');
+            assert.equal(old + 10, table.width(), "should have changed widths");
+        })
+        
+        afterEach(function() {
+            this.tabled.remove();
+        });
+        
     });
     
-    afterEach(function() {
-        this.tabled.remove();
-    });
-    
+    describe("an advanced tabled view", function() {
+        this.timeout(500);
+        beforeEach(function(){
+            this.Tabled = require('../');
+            
+            function inches2feet(inches, model){
+                var feet = Math.floor(inches/12);
+                var inches = inches % 12;
+                return feet + "'" + inches + '"';
+            }
+            
+            function feet_filter(term, value, formatted, model) {
+                if (term == "tall") return value > 70;
+                if (term == "short") return value < 69;
+                return true;
+            }
+            
+            this.columns = [
+                { id: "selector", key: "selected", label: "", select: true },
+                { id: "first_name", key: "first_name", label: "First Name", sort: "string", filter: "like",  },
+                { id: "last_name", key: "last_name", label: "Last Name", sort: "string", filter: "like",  },
+                { id: "age", key: "age", label: "Age", sort: "number", filter: "number" },
+                { id: "height", key: "height", label: "Height", format: inches2feet, filter: feet_filter }
+            ];
+            this.collection = new Backbone.Collection([
+                { id: 1, first_name: "andy",  last_name: "perlitch", age: 24 , height: 69, selected: false },
+                { id: 2, first_name: "scott", last_name: "perlitch", age: 26 , height: 71, selected: false },
+                { id: 3, first_name: "tevya", last_name: "robbins", age: 32  , height: 68, selected: true }
+            ]);
+            this.tabled = new this.Tabled({
+                collection: this.collection,
+                columns: this.columns,
+                table_width: 500
+            });
+            this.$pg = $("#playground");
+            this.tabled.render().$el.appendTo(this.$pg);
+        });
+        
+        it("should have a filter row with filter inputs", function() {
+            assert.equal( $('.filter-row input').length, 4, "filter row not there or not enough filter inputs" );
+        });
+        
+        it("should have checkboxes in the select column", function(){
+            assert.equal(3, $('.col-selector input[type="checkbox"]').length, "wrong number of checkboxes found");
+        });
+        
+        it("should render already selected rows as checked", function() {
+            assert($('.col-selector input[type="checkbox"]:eq(2)').is(":checked"), "initially selected row was not checked");
+        });
+        
+        it("should emit events when a checkbox is clicked", function(done) {
+            this.collection.once("change:selected", function(model, value) {
+                assert(this.collection.get(model) !== undefined, "model that changed was not in the collection");
+                done();
+            }, this);
+            $('.col-selector input[type="checkbox"]:eq(0)').trigger('click');
+        });
+        
+        it("should allow default filters", function(){
+            $('.filter-row input:eq(1)').val('perli').trigger('click');
+            assert.equal($(".tbody .tr").length, 2, "did not filter the rows down to 2");
+        });
+        
+        it("should allow custom filters", function(){
+            $('.filter-row input:eq(3)').val('tall').trigger('click');
+            assert.equal($(".tbody .tr").length, 1, "did not filter the rows down to 1");
+        });
+        
+        it("should allow default sorting", function(){
+            
+        });
+        
+        afterEach(function(){
+            this.tabled.remove();
+        });
+        
+    })
 })
 },{"assert":1,"../":7}],8:[function(require,module,exports){
 exports.readIEEE754 = function(buffer, offset, isBE, mLen, nBytes) {
@@ -2405,7 +2544,7 @@ var Tabled = BaseView.extend({
         );
 
         // Columns
-        this.columns = new Columns(this.options.columns, { tabled: this } );
+        this.columns = new Columns(this.options.columns, this.options );
         
         // Subviews
         this.thead = new Thead({
@@ -2416,9 +2555,22 @@ var Tabled = BaseView.extend({
             columns: this.columns
         });
         
+        // Listeners
+        this.listenTo(this.columns, "change:width", this.adjustInner );
+        this.listenTo(this.columns, "change:filter_value", this.renderBody);
     },
     
-    template: '<div class="tabled"><div class="thead"></div><div class="tbody"></div></div>',
+    template: [
+        '<div class="tabled-ctnr"><div class="tabled-inner">',
+        '<div class="tabled">',
+        '<div class="thead"></div>',
+        '<div class="tbody"></div>',
+        '<div class="resize-table">',
+        '<div class="resize-grip"></div><div class="resize-grip"></div><div class="resize-grip"></div>',
+        '</div>',
+        '</div>',
+        '</div></div>'
+    ].join(""),
     
     render: function() {
         // Set initial markup
@@ -2431,6 +2583,18 @@ var Tabled = BaseView.extend({
             '.tbody': this.tbody
         })
         return this;
+    },
+    
+    renderBody: function(){
+        this.assign({
+            '.tbody': this.tbody
+        });
+    },
+    
+    renderHead: function(){
+        this.assign({
+            '.thead': this.thead
+        });
     },
     
     setWidths: function() {
@@ -2451,6 +2615,7 @@ var Tabled = BaseView.extend({
             else if (min_col_width) {
                 totalWidth -= min_col_width;
                 adjustedWidth += min_col_width;
+                makeDefault.push(column);
             } 
             else {
                 makeDefault.push(column);
@@ -2464,13 +2629,47 @@ var Tabled = BaseView.extend({
             adjustedWidth += width;
         });
         this.currentWidth = adjustedWidth;
-        this.$el.width(adjustedWidth);
-    }
+        // this.$el.width(adjustedWidth);
+    },
     
+    adjustInner: function() {
+        var width = this.columns.reduce(function(memo, column){
+            var width = column.get('width') || column.get('min_column_width');
+            return memo*1 + width*1;
+        }, 0);
+        this.$('.tabled-inner').width(width);
+    },
+    
+    events: {
+        'mousedown .resize-table': 'grabTableResizer'
+    },
+    
+    grabTableResizer: function(evt){
+        evt.preventDefault();
+        evt.stopPropagation();
+        var self = this;
+        var mouseX = evt.clientX;
+        var col_state = this.columns.reduce(function(memo, column, index){
+            memo[column.get('id')] = column.get('width');
+            return memo;
+        },{},this);
+        var table_resize = function(evt){
+            var change = (evt.clientX - mouseX)/self.columns.length;
+            self.columns.each(function(column){
+                column.set({"width":col_state[column.get("id")]*1+change}, {validate:true});
+            })
+        } 
+        var cleanup_resize = function(evt) {
+            $(window).off("mousemove", table_resize);
+        }
+        
+        $(window).on("mousemove", table_resize);
+        $(window).one("mouseup", cleanup_resize);
+    }
 });
 
 exports = module.exports = Tabled
-},{"./lib/BaseView":10,"./lib/Column":11,"./lib/Thead":12,"./lib/Tbody":13}],9:[function(require,module,exports){
+},{"./lib/Column":10,"./lib/BaseView":11,"./lib/Thead":12,"./lib/Tbody":13}],9:[function(require,module,exports){
 (function (exports) {
 	'use strict';
 
@@ -2556,7 +2755,7 @@ exports = module.exports = Tabled
 	module.exports.fromByteArray = uint8ToBase64;
 }());
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 var BaseView = Backbone.View.extend({
     
     // Assigns a subview to a jquery selector in this view's el
@@ -2578,7 +2777,10 @@ var BaseView = Backbone.View.extend({
 });
 
 exports = module.exports = BaseView
-},{}],11:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
+var Filters = require("./Filters");
+var Sorts = require("./Sorts");
+var Formats = require("./Formats");
 var Column = Backbone.Model.extend({
     
     defaults: {
@@ -2588,16 +2790,65 @@ var Column = Backbone.Model.extend({
         sort: undefined,
         filter: undefined,
         format: undefined,
-        select: false
+        select: false,
+        filter_value: "",
+        sort_value: ""
+    },
+    
+    initialize: function() {
+        // Check for filter
+        var filter = this.get("filter");
+        if (typeof filter === "string" && Filters.hasOwnProperty(filter)) {
+            this.set("filter", Filters[filter]);
+        }
+        
+        // Check for sort
+        var sort = this.get("sort");
+        if (typeof sort === "string" && Sorts.hasOwnProperty(sort)) {
+            this.set("sort", Sorts[sort]);
+        }
+        
+        // Check for format
+        var select = this.get('select');
+        if (select) {
+            this.set("format", Formats.select );
+            this.set("select_key", this.get("key"));
+        }
     },
     
     serialize: function() {
         return this.toJSON();
+    },
+    
+    validate: function(attrs) {
+        if (attrs.width < attrs.min_column_width) return "A column width cannot be => 0";
+    },
+    
+    getKey: function(model) {
+        return model.get(this.get('key'));
+    },
+    
+    getFormatted: function(model) {
+        var fn = this.get('format');
+        return (typeof fn === "function")
+            ? fn(this.getKey(model), this.model)
+            : this.getKey(model);
     }
     
 });
 
 var Columns = Backbone.Collection.extend({
+    
+    initialize: function(models, options) {
+        this.options = options;
+        _.each(models, this.setMinWidth, this);
+    },
+    
+    setMinWidth: function(model) {
+        if (model.hasOwnProperty('min_column_width')) return;
+        
+        model['min_column_width'] = this.options.min_column_width;
+    },
     
     model: Column
     
@@ -2605,7 +2856,7 @@ var Columns = Backbone.Collection.extend({
 
 exports.model = Column;
 exports.collection = Columns;
-},{}],12:[function(require,module,exports){
+},{"./Filters":14,"./Sorts":15,"./Formats":16}],12:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var ThCell = BaseView.extend({
@@ -2614,11 +2865,55 @@ var ThCell = BaseView.extend({
     
     template: _.template('<div class="cell-inner" title="<%= label %>"><%= label %></div><span class="resize"></span>'),
     
+    initialize: function() {
+        this.listenTo(this.model, "change:width", function(model, width) {
+            this.$el.width(width);
+        })
+    },
+    
     render: function() {
         var json = this.model.serialize();
         this.$el.addClass('col-'+json.id).width(json.width);
         this.$el.html(this.template(json));
         return this;
+    },
+    
+    events: {
+        "mousedown .resize": "grabResizer",
+        "dblclick .resize": "fitToContent"
+    },
+    
+    grabResizer: function(evt) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        var self = this;
+        var mouseX = evt.clientX;
+        var columnWidth = this.model.get("width");
+        // Handler for when mouse is moving
+        var col_resize = function(evt) {
+            var column = self.model;
+            var change = evt.clientX - mouseX;
+            var newWidth = columnWidth + change;
+            if ( newWidth < (column.get("min_column_width") || self.options.min_column_width) ) return;
+            column.set("width", newWidth);
+        }
+        var cleanup_resize = function(evt) {
+            $(window).off("mousemove", col_resize);
+        }
+        
+        $(window).on("mousemove", col_resize);
+        $(window).one("mouseup", cleanup_resize);
+    },
+    
+    fitToContent: function(evt) {
+        var new_width = 0;
+        var min_width = this.model.get('min_column_width');
+        var id = this.model.get('id');
+        var $ctx = this.$el.parents('.tabled').find('.tbody');
+        $(".td.col-"+id+" .cell-inner", $ctx).each(function(i, el){
+            new_width = Math.max(new_width,$(this).outerWidth(true), min_width);
+        });
+        this.model.set({'width':new_width},{validate: true});
     }
     
 });
@@ -2641,43 +2936,84 @@ var ThRow = BaseView.extend({
 
 var FilterCell = BaseView.extend({
     
+    initialize: function() {
+        this.listenTo(this.model, "change:width", function(column, width){
+            this.$el.width(width);
+        })
+    },
+    
+    template: '<div class="cell-inner"><input class="filter" type="search" placeholder="filter" /></div>',
+    
+    render: function() {
+        var fn = this.model.get('filter');
+        var markup = typeof fn === "function" ? this.template : "" ;
+        this.$el.addClass('td col-'+this.model.get('id')).width(this.model.get('width'));
+        this.$el.html(markup);
+        return this;
+    },
+    
+    events: {
+        "click .filter": "updateFilter",
+        "keyup .filter": "updateFilterDelayed"
+    },
+    
+    updateFilter: function(evt) {
+        this.model.set('filter_value', $.trim(this.$('.filter').val()) );
+    },
+    
+    updateFilterDelayed: function(evt) {
+        if (this.updateFilterTimeout) clearTimeout(this.updateFilterTimeout)
+        this.updateFilterTimeout = setTimeout(this.updateFilter.bind(this, evt), 300);
+    }
+    
 });
 
 var FilterRow = BaseView.extend({
     
-    
+    render: function() {
+        // clear it
+        this.$el.empty();
+        
+        // render each th cell
+        this.collection.each(function(column){
+            var view = new FilterCell({ model: column });
+            this.$el.append( view.render().el )
+        }, this);
+        return this;
+    }
     
 });
+
 var Thead = BaseView.extend({
     
     initialize: function(options) {
         this.th_row     = new ThRow({ collection: this.collection });
-        if (this.needsFilterRow()) this.filter_row = new FilterRow({ collection: this.collection });
+        if (this.needsFilterRow()) {
+            this.filter_row = new FilterRow({ collection: this.collection });
+        }
     },
     
     template: '<div class="tr th-row"></div><div class="tr filter-row"></div>',
     
     render: function() {
         this.$el.html(this.template);
-        this.assign({
-            '.th-row'       : this.th_row,
-            '.filter-row'   : this.filter_row
-        });
-        
+        this.assign({ '.th-row' : this.th_row });
+        if (this.filter_row) this.assign({ '.filter-row' : this.filter_row });
+        else this.$('.filter-row').remove();
         return this;
     },
     
     needsFilterRow: function() {
         var needs_it = false;
         this.collection.each(function(column){
-            if (typeof column.get('filter') === 'function') needs_it = true;
+            if (typeof column.get('filter') !== 'undefined') needs_it = true;
         });
         return needs_it;
     }
     
 });
 exports = module.exports = Thead;
-},{"./BaseView":10}],13:[function(require,module,exports){
+},{"./BaseView":11}],13:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var Tdata = BaseView.extend({
@@ -2686,6 +3022,9 @@ var Tdata = BaseView.extend({
     
     initialize: function(options){
         this.column = options.column;
+        this.listenTo(this.column, "change:width", function(column, width){
+            this.$el.width(width);
+        })
     },
     
     template: '<div class="cell-inner"></div>',
@@ -2693,19 +3032,8 @@ var Tdata = BaseView.extend({
     render: function() {
         this.$el.addClass('col-'+this.column.id).width(this.column.get('width'));
         this.$el.html(this.template);
-        this.$(".cell-inner").append( this.getFormatted() );
+        this.$(".cell-inner").append( this.column.getFormatted(this) );
         return this;
-    },
-    
-    getKey: function() {
-        return this.model.get(this.column.get('key'));
-    },
-    
-    getFormatted: function() {
-        var fn = this.column.get('format');
-        return (typeof fn === "function")
-            ? fn(this.getKey(), this.model)
-            : this.getKey();
     }
     
 });
@@ -2726,7 +3054,6 @@ var Trow = BaseView.extend({
         
         return this;
     }
-    
 });
 
 var Tbody = BaseView.extend({
@@ -2744,13 +3071,74 @@ var Tbody = BaseView.extend({
                 model: row,
                 collection: this.columns
             });
-            this.$el.append( rowView.render().el );
+            if ( this.passesFilters(rowView) ) this.$el.append( rowView.render().el );
         }, this);
         
         return this;
+    },
+    
+    passesFilters: function(rowView){
+        return this.collection.every(function(column){
+            if (column.get('filter_value') == "" || typeof column.get('filter') !== "function") return true;
+            return this.passesFilter(this.model, column);
+        }, this);
+    },
+    
+    passesFilter: function(row, column){
+        return true;
     }
     
 });
 exports = module.exports = Tbody;
-},{"./BaseView":10}]},{},[6])
+},{"./BaseView":11}],14:[function(require,module,exports){
+exports.like = function(term, value, computedValue, row) {
+    term = term.toLowerCase();
+    value = value.toLowerCase();
+    return value.indexOf(term) > -1;
+}
+exports.is = function(term, value, computedValue, row) {
+    term = term.toLowerCase();
+    value = value.toLowerCase();
+    return term == value;
+}
+exports.number = function(term, value) {
+    value *= 1;
+    var first_two = term.substr(0,2);
+    var first_char = term[0];
+    var against_1 = term.substr(1)*1;
+    var against_2 = term.substr(2)*1;
+    if ( first_two == "<=" ) return value <= against_2 ;
+    if ( first_two == ">=" ) return value >= against_2 ;
+    if ( first_char == "<" ) return value < against_1 ;
+    if ( first_char == ">" ) return value > against_1 ;
+    if ( first_char == "~" ) return Math.round(value) == against_1 ;
+    if ( first_char == "=" ) return against_1 == value ;
+    return value.toString().indexOf(term.toString()) > -1 ;
+}
+},{}],15:[function(require,module,exports){
+exports.number = function(row1,row2) { 
+    return row1[field]*1 - row2[field]*1;
+}
+exports.string = function(row1,row2) { 
+    if ( row1[field].toString().toLowerCase() == row2[field].toString().toLowerCase() ) return 0;
+    return row1[field].toString().toLowerCase() > row2[field].toString().toLowerCase() ? 1 : -1 ;
+}
+},{}],16:[function(require,module,exports){
+exports.select = function(value, model) {
+    var select_key = model.get('select_key') || 'selected';
+    var checked = model.get(select_key) === true;
+    var $ret = $('<div class="cell-inner"><input type="checkbox"></div>');
+    
+    // Set checked
+    var $cb = $ret.find('input').prop('checked', checked);
+    
+    // Set click behavior
+    $cb.on('click', function(evt) {
+        if ($cb.is(":checked")) model.set(select_key, true);
+        else model.set(select_key, false);
+    })
+    
+    return $ret;
+}
+},{}]},{},[6])
 ;
