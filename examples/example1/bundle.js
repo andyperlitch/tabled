@@ -309,7 +309,6 @@ var Columns = Backbone.Collection.extend({
         if (this.sorts.length !== 0){
             var self = this;
             var comparator = function(row1, row2) {
-                console.log("sorts", self.sorts);
                 for (var i=0; i < self.sorts.length; i++) {
                     var id = self.sorts[i];
                     var column = self.get(id);
@@ -328,7 +327,7 @@ var Columns = Backbone.Collection.extend({
 
 exports.model = Column;
 exports.collection = Columns;
-},{"./Filters":7,"./Sorts":8,"./Formats":9}],5:[function(require,module,exports){
+},{"./Sorts":7,"./Filters":8,"./Formats":9}],5:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var ThCell = BaseView.extend({
@@ -533,7 +532,8 @@ var Tdata = BaseView.extend({
         this.column = options.column;
         this.listenTo(this.column, "change:width", function(column, width){
             this.$el.width(width);
-        })
+        });
+        this.listenTo(this.model, "change:"+this.column.get("key"), this.render );
     },
     
     template: '<div class="cell-inner"></div>',
@@ -601,6 +601,18 @@ var Tbody = BaseView.extend({
 });
 exports = module.exports = Tbody;
 },{"./BaseView":3}],7:[function(require,module,exports){
+exports.number = function(field){
+    return function(row1,row2) { 
+        return row1.get(field)*1 - row2.get(field)*1;
+    }
+}
+exports.string = function(field){
+    return function(row1,row2) { 
+        if ( row1.get(field).toString().toLowerCase() == row2.get(field).toString().toLowerCase() ) return 0;
+        return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
+    }
+}
+},{}],8:[function(require,module,exports){
 exports.like = function(term, value, computedValue, row) {
     term = term.toLowerCase();
     value = value.toLowerCase();
@@ -624,18 +636,6 @@ exports.number = function(term, value) {
     if ( first_char == "~" ) return Math.round(value) == against_1 ;
     if ( first_char == "=" ) return against_1 == value ;
     return value.toString().indexOf(term.toString()) > -1 ;
-}
-},{}],8:[function(require,module,exports){
-exports.number = function(field){
-    return function(row1,row2) { 
-        return row1.get(field)*1 - row2.get(field)*1;
-    }
-}
-exports.string = function(field){
-    return function(row1,row2) { 
-        if ( row1.get(field).toString().toLowerCase() == row2.get(field).toString().toLowerCase() ) return 0;
-        return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
-    }
 }
 },{}],9:[function(require,module,exports){
 exports.select = function(value, model) {
