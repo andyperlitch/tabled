@@ -180,7 +180,7 @@ describe("the Tabled module", function() {
                 { id: "first_name", key: "first_name", label: "First Name", sort: "string", filter: "like",  },
                 { id: "last_name", key: "last_name", label: "Last Name", sort: "string", filter: "like",  },
                 { id: "age", key: "age", label: "Age", sort: "number", filter: "number" },
-                { id: "height", key: "height", label: "Height", format: inches2feet, filter: feet_filter }
+                { id: "height", key: "height", label: "Height", format: inches2feet, filter: feet_filter, sort: "number" }
             ];
             this.collection = new Backbone.Collection([
                 { id: 1, first_name: "andy",  last_name: "perlitch", age: 24 , height: 69, selected: false },
@@ -226,10 +226,41 @@ describe("the Tabled module", function() {
             assert.equal($(".tbody .tr").length, 1, "did not filter the rows down to 1");
         });
         
-        it("should allow default sorting", function(){
+        it("should emit a sort event when the header is clicked", function(done){
+            this.collection.on("sort", function() {
+                assert(true);
+                done();
+            });
+            var vent = $.Event("click");
+            var $header = $(".th-header:eq(4)", this.$pg);
+            $header.trigger(vent);
             
         });
         
+        it("should correctly keep track of sort order", function() {
+            $(".th-header:eq(4)", this.$pg).trigger("click");
+            assert.equal("a", this.tabled.columns.get("height").get("sort_value"), "height column sort_value should be 'ascending'");
+            $(".th-header:eq(4)", this.$pg).trigger("click");
+            assert.equal("d", this.tabled.columns.get("height").get("sort_value"), "height column sort_value should be 'descending'");
+            $(".th-header:eq(4)", this.$pg).trigger("click");
+            assert.equal("", this.tabled.columns.get("height").get("sort_value"), "height column sort_value should be ''");
+        });
+        
+        it("should add sort icons to columns being sorted", function() {
+            var $header = $(".th-header:eq(4)", this.$pg);
+            var $th = $header.parent().parent();
+            $header.trigger("click");
+            assert($th.find('.asc-icon').length, "should have an asc-icon");
+            $header = $(".th-header:eq(4)", this.$pg);
+            $th = $header.parent().parent();
+            $header.trigger("click");
+            assert($th.find('.desc-icon').length, "should have a desc-icon");
+            $header = $(".th-header:eq(4)", this.$pg);
+            $th = $header.parent().parent();
+            $header.trigger("click");
+            assert($th.find('.asc-icon, .desc-icon').length === 0, "should not have any icons");
+        });
+                
         afterEach(function(){
             this.tabled.remove();
         });

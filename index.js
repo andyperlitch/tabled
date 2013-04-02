@@ -37,6 +37,7 @@ var Tabled = BaseView.extend({
         // Listeners
         this.listenTo(this.columns, "change:width", this.adjustInner );
         this.listenTo(this.columns, "change:filter_value", this.renderBody);
+        this.listenTo(this.columns, "change:comparator", this.updateComparator);
     },
     
     template: [
@@ -144,7 +145,13 @@ var Tabled = BaseView.extend({
         
         $(window).on("mousemove", table_resize);
         $(window).one("mouseup", cleanup_resize);
+    },
+    
+    updateComparator: function(fn) {
+        this.collection.comparator = fn;
+        if (typeof fn === "function") this.collection.sort();
     }
+
 });
 
 exports = module.exports = Tabled

@@ -81,6 +81,15 @@
 .tabled .th .desc-icon.white {
   background-position: -10px -8px;
 }
+.tabled .th .th-header {
+  cursor: pointer;
+  -webkit-user-select: none;
+  /* Chrome/Safari */
+  -moz-user-select: none;
+  /* Firefox */
+
+  user-select: none;
+}
 .tabled .resize-table {
   position: absolute;
   bottom: 0;

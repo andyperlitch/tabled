@@ -18,7 +18,7 @@ var columns = [
     { id: "first_name", key: "first_name", label: "First Name", sort: "string", filter: "like",  },
     { id: "last_name", key: "last_name", label: "Last Name", sort: "string", filter: "like",  },
     { id: "age", key: "age", label: "Age", sort: "number", filter: "number" },
-    { id: "height", key: "height", label: "Height", format: inches2feet, filter: feet_filter }
+    { id: "height", key: "height", label: "Height", format: inches2feet, filter: feet_filter, sort: "number" }
 ];
 var collection = new Backbone.Collection([
     { id: 1, first_name: "andy",  last_name: "perlitch", age: 24 , height: 69, selected: false },
@@ -72,6 +72,7 @@ var Tabled = BaseView.extend({
         // Listeners
         this.listenTo(this.columns, "change:width", this.adjustInner );
         this.listenTo(this.columns, "change:filter_value", this.renderBody);
+        this.listenTo(this.columns, "change:comparator", this.updateComparator);
     },
     
     template: [
@@ -179,7 +180,13 @@ var Tabled = BaseView.extend({
         
         $(window).on("mousemove", table_resize);
         $(window).one("mouseup", cleanup_resize);
+    },
+    
+    updateComparator: function(fn) {
+        this.collection.comparator = fn;
+        if (typeof fn === "function") this.collection.sort();
     }
+
 });
 
 exports = module.exports = Tabled
@@ -233,7 +240,7 @@ var Column = Backbone.Model.extend({
         // Check for sort
         var sort = this.get("sort");
         if (typeof sort === "string" && Sorts.hasOwnProperty(sort)) {
-            this.set("sort", Sorts[sort]);
+            this.set("sort", Sorts[sort](this.get("key")));
         }
         
         // Check for format
@@ -267,9 +274,13 @@ var Column = Backbone.Model.extend({
 
 var Columns = Backbone.Collection.extend({
     
+    model: Column,
+    
     initialize: function(models, options) {
         this.options = options;
         _.each(models, this.setMinWidth, this);
+        this.sorts = this.getInitialSorts();
+        this.on("change:sort_value", this.onSortChange);
     },
     
     setMinWidth: function(model) {
@@ -278,37 +289,97 @@ var Columns = Backbone.Collection.extend({
         model['min_column_width'] = this.options.min_column_width;
     },
     
-    model: Column
+    getInitialSorts: function() {
+        var self = this;
+        var sorts;
+        
+        if (this.options.sorts) {
+            sorts = this.options.sorts;
+            if ( ! (_.every(sorts, function(sort) { return self.get(sort) })) ) {
+                throw new Error("One or more values in the 'sorts' option does not match a column id");
+            }
+        } else {
+            sorts = this.reduce(function(memo, column){ 
+                if (column.get('sort_value') != "") 
+                    memo.push(column.get("id")); 
+                
+                return memo;
+            },[]);
+        }
+        return sorts;
+    },
+    
+    onSortChange: function(model, value) {
+        var id = model.get("id");
+        var index = this.sorts.indexOf(id);
+        if (index != -1) {
+            if (value === "") {
+                this.sorts.splice(index, 1);
+            }
+        } else {
+            this.sorts.push(id);
+        }
+        this.updateComparator();
+    },
+    
+    updateComparator: function() {
+        var comparator = false;
+        if (this.sorts.length !== 0){
+            var self = this;
+            var comparator = function(row1, row2) {
+                console.log("sorts", self.sorts);
+                for (var i=0; i < self.sorts.length; i++) {
+                    var id = self.sorts[i];
+                    var column = self.get(id);
+                    var fn = column.get("sort");
+                    var value = column.get("sort_value");
+                    var sort_result = value == "a" ? fn(row1, row2) : fn(row2, row1) ;
+                    if (sort_result != 0) return sort_result;
+                };
+                return 0;
+            }
+        }
+        this.trigger("change:comparator", comparator);
+    }
     
 });
 
 exports.model = Column;
 exports.collection = Columns;
-},{"./Filters":7,"./Sorts":8,"./Formats":9}],5:[function(require,module,exports){
+},{"./Sorts":7,"./Filters":8,"./Formats":9}],5:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var ThCell = BaseView.extend({
     
     className: 'th',
     
-    template: _.template('<div class="cell-inner" title="<%= label %>"><%= label %></div><span class="resize"></span>'),
+    template: _.template('<div class="cell-inner" title="<%= label %>"><span class="th-header"><%= label %></span></div><span class="resize"></span>'),
     
     initialize: function() {
+        this.listenTo(this.model, "change:sort_value", this.render );
         this.listenTo(this.model, "change:width", function(model, width) {
             this.$el.width(width);
-        })
+        });
     },
     
     render: function() {
         var json = this.model.serialize();
-        this.$el.addClass('col-'+json.id).width(json.width);
-        this.$el.html(this.template(json));
+        var sort_class = json.sort_value ? (json.sort_value == "d" ? "desc" : "asc" ) : "" ;
+        this.$el
+            .removeClass('asc desc')
+            .addClass('col-'+json.id+" "+sort_class)
+            .width(json.width)
+            .html(this.template(json));
+        if (sort_class !== "") {
+            this.$(".th-header").prepend('<i class="'+sort_class+'-icon"></i> ');
+        }
         return this;
     },
     
     events: {
         "mousedown .resize": "grabResizer",
-        "dblclick .resize": "fitToContent"
+        "dblclick .resize": "fitToContent",
+        "click .th-header": "changeColumnSort"
     },
     
     grabResizer: function(evt) {
@@ -342,6 +413,34 @@ var ThCell = BaseView.extend({
             new_width = Math.max(new_width,$(this).outerWidth(true), min_width);
         });
         this.model.set({'width':new_width},{validate: true});
+    },
+    
+    changeColumnSort: function(evt) {
+        
+        var model = this.model;
+        
+        if (typeof model.get("sort") !== "function") return;
+        
+        var cur_sort = model.get("sort_value");
+        
+        if (!evt.shiftKey) {
+            // disable all sorts
+            model.collection.each(function(col){
+                if (col !== model) col.set({"sort_value": ""})
+            });
+        }
+        
+        switch(cur_sort) {
+            case "":
+                model.set("sort_value", "a");
+                break;
+            case "a":
+                model.set("sort_value", "d");
+                break;
+            case "d":
+                model.set("sort_value", "");
+                break;
+        }
     }
     
 });
@@ -489,6 +588,7 @@ var Tbody = BaseView.extend({
     initialize: function(options) {
         this.columns = options.columns;
         this.listenTo(this.collection, "reset", this.render);
+        this.listenTo(this.collection, "sort", this.render);
     },
     
     render: function() {
@@ -519,6 +619,18 @@ var Tbody = BaseView.extend({
 });
 exports = module.exports = Tbody;
 },{"./BaseView":3}],7:[function(require,module,exports){
+exports.number = function(field){
+    return function(row1,row2) { 
+        return row1.get(field)*1 - row2.get(field)*1;
+    }
+}
+exports.string = function(field){
+    return function(row1,row2) { 
+        if ( row1.get(field).toString().toLowerCase() == row2.get(field).toString().toLowerCase() ) return 0;
+        return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
+    }
+}
+},{}],8:[function(require,module,exports){
 exports.like = function(term, value, computedValue, row) {
     term = term.toLowerCase();
     value = value.toLowerCase();
@@ -542,14 +654,6 @@ exports.number = function(term, value) {
     if ( first_char == "~" ) return Math.round(value) == against_1 ;
     if ( first_char == "=" ) return against_1 == value ;
     return value.toString().indexOf(term.toString()) > -1 ;
-}
-},{}],8:[function(require,module,exports){
-exports.number = function(row1,row2) { 
-    return row1[field]*1 - row2[field]*1;
-}
-exports.string = function(row1,row2) { 
-    if ( row1[field].toString().toLowerCase() == row2[field].toString().toLowerCase() ) return 0;
-    return row1[field].toString().toLowerCase() > row2[field].toString().toLowerCase() ? 1 : -1 ;
 }
 },{}],9:[function(require,module,exports){
 exports.select = function(value, model) {
