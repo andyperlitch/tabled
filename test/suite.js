@@ -154,7 +154,6 @@ describe("the Tabled module", function() {
         
         it("rows should update when the models change", function() {
             var before = $(".td.col-age:eq(0)", this.$pg).text();
-            console.log(before);
             this.collection.at(0).set("age", 25);
             var after = $(".td.col-age:eq(0)", this.$pg).text();
             assert(before != after, "age should have changed in the cell");

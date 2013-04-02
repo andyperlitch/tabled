@@ -60,6 +60,16 @@ Also note that you cannot set a width to something less than the sum of the mini
 `Int` The default minimum column width in pixels that any one column can be. This can be overridden on a per-column basis by setting the same key on the column object.
 
 
+###`row_sorts` (default: `[]`)
+`Array` Specify the sort precedence of columns by providing an array of column ids. For example, passing an array like this: `["last_name", "first_name", "age"]` will sort the data first by `last_name`, then `first_name`, then `age`. The sort directions of these columns should be set using the `sort_value` option on the column object (see below).  
+
+
+###`col_sorts` (default: `[]`)
+`Array` Specify the column order by their ids in an array.
+
+Example: `["id", "last_name", "first_name"]`
+
+
 ##Columns
 
 `tabled` expects an array of column objects to be past to it via the `columns` key . The following are all the keys possible on a column object
@@ -91,6 +101,11 @@ Allows the column to be sortable by clicking on the column header. If this is a 
     }
 
 This function defines the ascending order, and the descending order is defined by reversing the order of the arguments.
+
+###`sort_value` (optional)
+
+`String` (`a|d`)
+If you want to set an initial sort direction for a column, set this option to either `'a'` for ascending or `'d'` for descending. To set multiple column sorts in a specific order, use this in conjunction with the `sort` key on the options of the main `tabled` view (see above).
 
 ###`filter` (optional)
 

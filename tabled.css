@@ -35,6 +35,12 @@
   width: 86%;
   padding: 0 7%;
 }
+.tabled .tr .colsort-helper {
+  width: 0px;
+  height: 100%;
+  display: inline-block;
+  box-shadow: 0 0 2px 1px red;
+}
 .tabled input.filter {
   width: 100%;
   max-width: 200px;

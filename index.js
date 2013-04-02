@@ -38,6 +38,7 @@ var Tabled = BaseView.extend({
         this.listenTo(this.columns, "change:width", this.adjustInner );
         this.listenTo(this.columns, "change:filter_value", this.renderBody);
         this.listenTo(this.columns, "change:comparator", this.updateComparator);
+        this.listenTo(this.columns, "sort", this.render);
     },
     
     template: [
