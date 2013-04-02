@@ -183,7 +183,7 @@ describe("the Tabled module", function() {
             }
             
             this.columns = [
-                { id: "selector", key: "selected", label: "", select: true },
+                { id: "selector", key: "selected", label: "", select: true, lock_width: true },
                 { id: "first_name", key: "first_name", label: "First Name", sort: "string", filter: "like",  },
                 { id: "last_name", key: "last_name", label: "Last Name", sort: "string", filter: "like",  },
                 { id: "age", key: "age", label: "Age", sort: "number", filter: "number" },
@@ -222,6 +222,12 @@ describe("the Tabled module", function() {
             }, this);
             $('.col-selector input[type="checkbox"]:eq(0)').trigger('click');
         });
+
+        it("should lock the width of the columns that have lock_width enabled", function() {
+            var col = this.tabled.columns.get('selector');
+            col.set({'width': 200}, {validate: true});
+            assert(col.get('width') != 200, "width of column changed when it should not have.");
+        });
         
         it("should allow default filters", function(){
             $('.filter-row input:eq(1)').val('perli').trigger('click');
@@ -239,17 +245,17 @@ describe("the Tabled module", function() {
                 done();
             });
             var vent = $.Event("mouseup");
-            var $header = $(".th-header:eq(4)", this.$pg).parent().parent();
+            var $header = $(".th-header:eq(4)", this.$pg);
             $header.trigger(vent);
             
         });
         
         it("should correctly keep track of sort order", function() {
-            $(".th-header:eq(4)", this.$pg).parent().parent().trigger("mouseup");
+            $(".th-header:eq(4)", this.$pg).trigger("mouseup");
             assert.equal("a", this.tabled.columns.get("height").get("sort_value"), "height column sort_value should be 'ascending'");
-            $(".th-header:eq(4)", this.$pg).parent().parent().trigger("mouseup");
+            $(".th-header:eq(4)", this.$pg).trigger("mouseup");
             assert.equal("d", this.tabled.columns.get("height").get("sort_value"), "height column sort_value should be 'descending'");
-            $(".th-header:eq(4)", this.$pg).parent().parent().trigger("mouseup");
+            $(".th-header:eq(4)", this.$pg).trigger("mouseup");
             assert.equal("", this.tabled.columns.get("height").get("sort_value"), "height column sort_value should be ''");
         });
         
@@ -269,7 +275,7 @@ describe("the Tabled module", function() {
         });
         
         it("should have sortable columns", function() {
-            var $th = $(".th-header:eq(4)", this.$pg).parent().parent();
+            var $th = $(".th-header:eq(4)", this.$pg);
             var down = $.Event("mousedown", {clientX: 300, originalEvent: { preventDefault: function() {} }});
             $th.trigger(down);
             var move = $.Event("mousemove", {clientX: 0});
@@ -279,12 +285,12 @@ describe("the Tabled module", function() {
         });
         
         it("should not sort rows when columns are being sorted", function() {
-            var $th = $(".th-header:eq(4)", this.$pg).parent().parent();
+            var $th = $(".th-header:eq(4)", this.$pg);
             var down = $.Event("mousedown", {clientX: 300, originalEvent: { preventDefault: function() {} }});
             $th.trigger(down);
             var move = $.Event("mousemove", {clientX: 0});
             $th.trigger(move);
-            $th.find(".th-header").trigger("mouseup");
+            $th.trigger("mouseup");
             assert.equal('', this.tabled.columns.get("height").get("sort_value"), "changed sort order when moving columns");
         });
                 

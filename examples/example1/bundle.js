@@ -272,7 +272,8 @@ var Column = Backbone.Model.extend({
         format: undefined,
         select: false,
         filter_value: "",
-        sort_value: ""
+        sort_value: "",
+        lock_width: false
     },
     
     initialize: function() {
@@ -301,7 +302,11 @@ var Column = Backbone.Model.extend({
     },
     
     validate: function(attrs) {
+        
         if (attrs.width < attrs.min_column_width) return "A column width cannot be => 0";
+        
+        if (attrs.lock_width === true && attrs.width > 0) return "This column has a locked width";
+        
     },
     
     getKey: function(model) {
@@ -432,93 +437,14 @@ var Columns = Backbone.Collection.extend({
 
 exports.model = Column;
 exports.collection = Columns;
-},{"./Filters":7,"./Sorts":8,"./Formats":9}],6:[function(require,module,exports){
-var BaseView = require('./BaseView');
-
-var Tdata = BaseView.extend({
-    
-    className: 'td',
-    
-    initialize: function(options){
-        this.column = options.column;
-        this.listenTo(this.column, "change:width", function(column, width){
-            this.$el.width(width);
-        });
-        this.listenTo(this.model, "change:"+this.column.get("key"), this.render );
-    },
-    
-    template: '<div class="cell-inner"></div>',
-    
-    render: function() {
-        this.$el.addClass('col-'+this.column.id).width(this.column.get('width'));
-        this.$el.html(this.template);
-        this.$(".cell-inner").append( this.column.getFormatted(this.model) );
-        return this;
-    }
-    
-});
-
-var Trow = BaseView.extend({
-    
-    className: 'tr',
-    
-    render: function() {
-        this.$el.empty();
-        this.collection.each(function(column){
-            var tdView = new Tdata({
-                model: this.model,
-                column: column
-            });
-            this.$el.append( tdView.render().el );
-        }, this);
-        
-        return this;
-    }
-});
-
-var Tbody = BaseView.extend({
-    
-    initialize: function(options) {
-        this.columns = options.columns;
-        this.listenTo(this.collection, "reset", this.render);
-        this.listenTo(this.collection, "sort", this.render);
-    },
-    
-    render: function() {
-        
-        this.$el.empty();
-        this.collection.each(function(row){
-            var rowView = new Trow({
-                model: row,
-                collection: this.columns
-            });
-            if ( this.passesFilters(row) ) this.$el.append( rowView.render().el );
-        }, this);
-        
-        return this;
-    },
-    
-    passesFilters: function(row){
-        return this.columns.every(function(column){
-            if (column.get('filter_value') == "" || typeof column.get('filter') !== "function") return true;
-            return this.passesFilter(row, column);
-        }, this);
-    },
-    
-    passesFilter: function(row, column){
-        return column.get('filter')( column.get('filter_value'), row.get(column.get('key')), column.getFormatted(row), row );
-    }
-    
-});
-exports = module.exports = Tbody;
-},{"./BaseView":3}],5:[function(require,module,exports){
+},{"./Filters":7,"./Sorts":8,"./Formats":9}],5:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var ThCell = BaseView.extend({
     
     className: 'th',
     
-    template: _.template('<div class="cell-inner" title="<%= label %>"><span class="th-header"><%= label %></span></div><span class="resize"></span>'),
+    template: _.template('<div class="cell-inner" title="<%= label %>"><span class="th-header"><%= label %></span></div><% if(lock_width !== true) {%><span class="resize"></span><%}%>'),
     
     initialize: function() {
         this.listenTo(this.model, "change:sort_value", this.render );
@@ -544,13 +470,14 @@ var ThCell = BaseView.extend({
     events: {
         "mousedown .resize": "grabResizer",
         "dblclick .resize": "fitToContent",
-        "mouseup": "changeColumnSort",
-        "mousedown": "grabColumn"
+        "mouseup .th-header": "changeColumnSort",
+        "mousedown .th-header": "grabColumn"
     },
     
     grabResizer: function(evt) {
         evt.preventDefault();
         evt.stopPropagation();
+        console.log("testing here");
         var self = this;
         var mouseX = evt.clientX;
         var columnWidth = this.model.get("width");
@@ -560,7 +487,7 @@ var ThCell = BaseView.extend({
             var change = evt.clientX - mouseX;
             var newWidth = columnWidth + change;
             if ( newWidth < (column.get("min_column_width") || self.options.min_column_width) ) return;
-            column.set("width", newWidth);
+            column.set({"width": newWidth}, {validate: true});
         }
         var cleanup_resize = function(evt) {
             $(window).off("mousemove", col_resize);
@@ -571,6 +498,8 @@ var ThCell = BaseView.extend({
     },
     
     fitToContent: function(evt) {
+        evt.preventDefault();
+        evt.stopPropagation();
         var new_width = 0;
         var min_width = this.model.get('min_column_width');
         var id = this.model.get('id');
@@ -764,6 +693,85 @@ var Thead = BaseView.extend({
     
 });
 exports = module.exports = Thead;
+},{"./BaseView":3}],6:[function(require,module,exports){
+var BaseView = require('./BaseView');
+
+var Tdata = BaseView.extend({
+    
+    className: 'td',
+    
+    initialize: function(options){
+        this.column = options.column;
+        this.listenTo(this.column, "change:width", function(column, width){
+            this.$el.width(width);
+        });
+        this.listenTo(this.model, "change:"+this.column.get("key"), this.render );
+    },
+    
+    template: '<div class="cell-inner"></div>',
+    
+    render: function() {
+        this.$el.addClass('col-'+this.column.id).width(this.column.get('width'));
+        this.$el.html(this.template);
+        this.$(".cell-inner").append( this.column.getFormatted(this.model) );
+        return this;
+    }
+    
+});
+
+var Trow = BaseView.extend({
+    
+    className: 'tr',
+    
+    render: function() {
+        this.$el.empty();
+        this.collection.each(function(column){
+            var tdView = new Tdata({
+                model: this.model,
+                column: column
+            });
+            this.$el.append( tdView.render().el );
+        }, this);
+        
+        return this;
+    }
+});
+
+var Tbody = BaseView.extend({
+    
+    initialize: function(options) {
+        this.columns = options.columns;
+        this.listenTo(this.collection, "reset", this.render);
+        this.listenTo(this.collection, "sort", this.render);
+    },
+    
+    render: function() {
+        
+        this.$el.empty();
+        this.collection.each(function(row){
+            var rowView = new Trow({
+                model: row,
+                collection: this.columns
+            });
+            if ( this.passesFilters(row) ) this.$el.append( rowView.render().el );
+        }, this);
+        
+        return this;
+    },
+    
+    passesFilters: function(row){
+        return this.columns.every(function(column){
+            if (column.get('filter_value') == "" || typeof column.get('filter') !== "function") return true;
+            return this.passesFilter(row, column);
+        }, this);
+    },
+    
+    passesFilter: function(row, column){
+        return column.get('filter')( column.get('filter_value'), row.get(column.get('key')), column.getFormatted(row), row );
+    }
+    
+});
+exports = module.exports = Tbody;
 },{"./BaseView":3}],7:[function(require,module,exports){
 exports.like = function(term, value, computedValue, row) {
     term = term.toLowerCase();

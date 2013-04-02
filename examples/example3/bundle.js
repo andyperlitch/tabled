@@ -14,7 +14,7 @@ function feet_filter(term, value, formatted, model) {
 }
 
 var columns = [
-    { id: "selector", key: "selected", label: "", select: true, width: 30 },
+    { id: "selector", key: "selected", label: "", select: true, width: 30, lock_width: true },
     { id: "first_name", key: "first_name", label: "First Name", sort: "string", filter: "like",  },
     { id: "last_name", key: "last_name", label: "Last Name", sort: "string", filter: "like",  },
     { id: "age", key: "age", label: "Age", sort: "number", filter: "number" },
@@ -28,7 +28,9 @@ var collection = new Backbone.Collection([
 var tabled = new Tabled({
     collection: collection,
     columns: columns,
-    table_width: 500
+    table_width: 500,
+    id: "example3tabled",
+    save_state: true
 });
 var $pg = $("#playground");
 tabled.render().$el.appendTo($pg);
