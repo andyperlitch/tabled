@@ -69,11 +69,16 @@ var Tabled = BaseView.extend({
             columns: this.columns
         });
         
+        // State
+        if (this.options.save_state) {
+            this.restorePreviousState();
+        }
+        
         // Listeners
-        this.listenTo(this.columns, "change:width", this.adjustInner );
+        this.listenTo(this.columns, "change:width", this.onWidthChange );
         this.listenTo(this.columns, "change:filter_value", this.renderBody);
         this.listenTo(this.columns, "change:comparator", this.updateComparator);
-        this.listenTo(this.columns, "sort", this.render);
+        this.listenTo(this.columns, "sort", this.onColumnSort);
     },
     
     template: [
@@ -113,9 +118,28 @@ var Tabled = BaseView.extend({
         });
     },
     
-    setWidths: function() {
+    onWidthChange: function(){
+        this.adjustInnerDiv();
         
-        // TODO: check for saved_state widths
+        // Save the widths
+        if (!this.options.save_state) return;
+        var widths = this.columns.reduce(function(memo, column, key){
+            memo[column.get('id')] = column.get('width');
+            return memo;
+        }, {}, this);
+        this.state('column_widths', widths);
+    },
+    
+    onColumnSort: function() {
+        this.render();
+        
+        // Save sort
+        if (!this.options.save_state) return;
+        var sorts = this.columns.col_sorts;
+        this.state('column_sorts', sorts);
+    },
+    
+    setWidths: function() {
         
         // Table's width
         var totalWidth = this.options.table_width === 'auto' ? this.$el.width() : this.options.table_width;
@@ -144,11 +168,10 @@ var Tabled = BaseView.extend({
             column.set('width', width);
             adjustedWidth += width;
         });
-        this.currentWidth = adjustedWidth;
         // this.$el.width(adjustedWidth);
     },
     
-    adjustInner: function() {
+    adjustInnerDiv: function() {
         var width = this.columns.reduce(function(memo, column){
             var width = column.get('width') || column.get('min_column_width');
             return memo*1 + width*1;
@@ -186,12 +209,51 @@ var Tabled = BaseView.extend({
     updateComparator: function(fn) {
         this.collection.comparator = fn;
         if (typeof fn === "function") this.collection.sort();
+    },
+    
+    restorePreviousState: function() {
+        // Check widths
+        var widths = this.state('column_widths');
+        if (widths !== undefined) {
+            _.each(widths, function(val, key){
+                this.columns.get(key).set('width', val);
+            }, this);
+        }
+        
+        // Check for column sort order
+        var colsorts = this.state('column_sorts');
+        if (colsorts !== undefined) {
+            this.columns.col_sorts = colsorts;
+            this.columns.sort();
+        }
+    },
+    
+    state: function(key, value) {
+        var storage_key = 'tabled.'+this.options.id;
+        var store = this.store || localStorage.getItem(storage_key) || {};
+        
+        if (typeof store !== "object") {
+            try {
+                store = JSON.parse(store);
+            } catch(e) {
+                store = {};
+            }
+        }
+        this.store = store;
+        
+        if (value !== undefined) {
+            store[key] = value;
+            localStorage.setItem(storage_key, JSON.stringify(store));
+            return this;
+        } else {
+            return store[key];
+        }
     }
 
 });
 
 exports = module.exports = Tabled
-},{"./lib/BaseView":3,"./lib/Column":4,"./lib/Tbody":5,"./lib/Thead":6}],3:[function(require,module,exports){
+},{"./lib/BaseView":3,"./lib/Column":4,"./lib/Thead":5,"./lib/Tbody":6}],3:[function(require,module,exports){
 var BaseView = Backbone.View.extend({
     
     // Assigns a subview to a jquery selector in this view's el
@@ -213,86 +275,7 @@ var BaseView = Backbone.View.extend({
 });
 
 exports = module.exports = BaseView
-},{}],5:[function(require,module,exports){
-var BaseView = require('./BaseView');
-
-var Tdata = BaseView.extend({
-    
-    className: 'td',
-    
-    initialize: function(options){
-        this.column = options.column;
-        this.listenTo(this.column, "change:width", function(column, width){
-            this.$el.width(width);
-        });
-        this.listenTo(this.model, "change:"+this.column.get("key"), this.render );
-    },
-    
-    template: '<div class="cell-inner"></div>',
-    
-    render: function() {
-        this.$el.addClass('col-'+this.column.id).width(this.column.get('width'));
-        this.$el.html(this.template);
-        this.$(".cell-inner").append( this.column.getFormatted(this.model) );
-        return this;
-    }
-    
-});
-
-var Trow = BaseView.extend({
-    
-    className: 'tr',
-    
-    render: function() {
-        this.$el.empty();
-        this.collection.each(function(column){
-            var tdView = new Tdata({
-                model: this.model,
-                column: column
-            });
-            this.$el.append( tdView.render().el );
-        }, this);
-        
-        return this;
-    }
-});
-
-var Tbody = BaseView.extend({
-    
-    initialize: function(options) {
-        this.columns = options.columns;
-        this.listenTo(this.collection, "reset", this.render);
-        this.listenTo(this.collection, "sort", this.render);
-    },
-    
-    render: function() {
-        
-        this.$el.empty();
-        this.collection.each(function(row){
-            var rowView = new Trow({
-                model: row,
-                collection: this.columns
-            });
-            if ( this.passesFilters(row) ) this.$el.append( rowView.render().el );
-        }, this);
-        
-        return this;
-    },
-    
-    passesFilters: function(row){
-        return this.columns.every(function(column){
-            if (column.get('filter_value') == "" || typeof column.get('filter') !== "function") return true;
-            return this.passesFilter(row, column);
-        }, this);
-    },
-    
-    passesFilter: function(row, column){
-        return column.get('filter')( column.get('filter_value'), row.get(column.get('key')), column.getFormatted(row), row );
-    }
-    
-});
-exports = module.exports = Tbody;
-},{"./BaseView":3}],4:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 var Filters = require("./Filters");
 var Sorts = require("./Sorts");
 var Formats = require("./Formats");
@@ -467,7 +450,7 @@ var Columns = Backbone.Collection.extend({
 
 exports.model = Column;
 exports.collection = Columns;
-},{"./Filters":7,"./Sorts":8,"./Formats":9}],6:[function(require,module,exports){
+},{"./Sorts":7,"./Filters":8,"./Formats":9}],5:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var ThCell = BaseView.extend({
@@ -500,7 +483,7 @@ var ThCell = BaseView.extend({
     events: {
         "mousedown .resize": "grabResizer",
         "dblclick .resize": "fitToContent",
-        "click .th-header": "changeColumnSort",
+        "mouseup": "changeColumnSort",
         "mousedown": "grabColumn"
     },
     
@@ -541,7 +524,7 @@ var ThCell = BaseView.extend({
         
         var model = this.model;
         
-        if (typeof model.get("sort") !== "function") return;
+        if (typeof model.get("sort") !== "function" || model.get("moving") === true) return;
         
         var cur_sort = model.get("sort_value");
         
@@ -566,7 +549,6 @@ var ThCell = BaseView.extend({
     },
     
     grabColumn: function(evt) {
-        
         evt.preventDefault();
         evt.originalEvent.preventDefault();
         
@@ -582,6 +564,7 @@ var ThCell = BaseView.extend({
             var half = $this.width() / 2;
             if (i != currentIdx) thresholds.push(offset+half);
         });
+        var prevent_mouseup = false;
         
         var getNewIndex = function(pos) {
             var newIdx = 0;
@@ -607,6 +590,7 @@ var ThCell = BaseView.extend({
             
             var newIdx = getNewIndex(curMouse, thresholds);
             drawHelper(newIdx);
+            self.model.set('moving', true);
         }
         
         var cleanup_move = function(evt) {
@@ -616,6 +600,7 @@ var ThCell = BaseView.extend({
             var change = curMouse - mouseX;
             self.model.sortIndex(getNewIndex(curMouse, thresholds));
             $(window).off("mousemove", move_column);
+            self.model.set('moving', false);
         }
         
         $(window).on("mousemove", move_column);
@@ -718,7 +703,98 @@ var Thead = BaseView.extend({
     
 });
 exports = module.exports = Thead;
+},{"./BaseView":3}],6:[function(require,module,exports){
+var BaseView = require('./BaseView');
+
+var Tdata = BaseView.extend({
+    
+    className: 'td',
+    
+    initialize: function(options){
+        this.column = options.column;
+        this.listenTo(this.column, "change:width", function(column, width){
+            this.$el.width(width);
+        });
+        this.listenTo(this.model, "change:"+this.column.get("key"), this.render );
+    },
+    
+    template: '<div class="cell-inner"></div>',
+    
+    render: function() {
+        this.$el.addClass('col-'+this.column.id).width(this.column.get('width'));
+        this.$el.html(this.template);
+        this.$(".cell-inner").append( this.column.getFormatted(this.model) );
+        return this;
+    }
+    
+});
+
+var Trow = BaseView.extend({
+    
+    className: 'tr',
+    
+    render: function() {
+        this.$el.empty();
+        this.collection.each(function(column){
+            var tdView = new Tdata({
+                model: this.model,
+                column: column
+            });
+            this.$el.append( tdView.render().el );
+        }, this);
+        
+        return this;
+    }
+});
+
+var Tbody = BaseView.extend({
+    
+    initialize: function(options) {
+        this.columns = options.columns;
+        this.listenTo(this.collection, "reset", this.render);
+        this.listenTo(this.collection, "sort", this.render);
+    },
+    
+    render: function() {
+        
+        this.$el.empty();
+        this.collection.each(function(row){
+            var rowView = new Trow({
+                model: row,
+                collection: this.columns
+            });
+            if ( this.passesFilters(row) ) this.$el.append( rowView.render().el );
+        }, this);
+        
+        return this;
+    },
+    
+    passesFilters: function(row){
+        return this.columns.every(function(column){
+            if (column.get('filter_value') == "" || typeof column.get('filter') !== "function") return true;
+            return this.passesFilter(row, column);
+        }, this);
+    },
+    
+    passesFilter: function(row, column){
+        return column.get('filter')( column.get('filter_value'), row.get(column.get('key')), column.getFormatted(row), row );
+    }
+    
+});
+exports = module.exports = Tbody;
 },{"./BaseView":3}],7:[function(require,module,exports){
+exports.number = function(field){
+    return function(row1,row2) { 
+        return row1.get(field)*1 - row2.get(field)*1;
+    }
+}
+exports.string = function(field){
+    return function(row1,row2) { 
+        if ( row1.get(field).toString().toLowerCase() == row2.get(field).toString().toLowerCase() ) return 0;
+        return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
+    }
+}
+},{}],8:[function(require,module,exports){
 exports.like = function(term, value, computedValue, row) {
     term = term.toLowerCase();
     value = value.toLowerCase();
@@ -742,18 +818,6 @@ exports.number = function(term, value) {
     if ( first_char == "~" ) return Math.round(value) == against_1 ;
     if ( first_char == "=" ) return against_1 == value ;
     return value.toString().indexOf(term.toString()) > -1 ;
-}
-},{}],8:[function(require,module,exports){
-exports.number = function(field){
-    return function(row1,row2) { 
-        return row1.get(field)*1 - row2.get(field)*1;
-    }
-}
-exports.string = function(field){
-    return function(row1,row2) { 
-        if ( row1.get(field).toString().toLowerCase() == row2.get(field).toString().toLowerCase() ) return 0;
-        return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
-    }
 }
 },{}],9:[function(require,module,exports){
 exports.select = function(value, model) {

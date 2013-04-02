@@ -238,39 +238,143 @@ describe("the Tabled module", function() {
                 assert(true);
                 done();
             });
-            var vent = $.Event("click");
-            var $header = $(".th-header:eq(4)", this.$pg);
+            var vent = $.Event("mouseup");
+            var $header = $(".th-header:eq(4)", this.$pg).parent().parent();
             $header.trigger(vent);
             
         });
         
         it("should correctly keep track of sort order", function() {
-            $(".th-header:eq(4)", this.$pg).trigger("click");
+            $(".th-header:eq(4)", this.$pg).parent().parent().trigger("mouseup");
             assert.equal("a", this.tabled.columns.get("height").get("sort_value"), "height column sort_value should be 'ascending'");
-            $(".th-header:eq(4)", this.$pg).trigger("click");
+            $(".th-header:eq(4)", this.$pg).parent().parent().trigger("mouseup");
             assert.equal("d", this.tabled.columns.get("height").get("sort_value"), "height column sort_value should be 'descending'");
-            $(".th-header:eq(4)", this.$pg).trigger("click");
+            $(".th-header:eq(4)", this.$pg).parent().parent().trigger("mouseup");
             assert.equal("", this.tabled.columns.get("height").get("sort_value"), "height column sort_value should be ''");
         });
         
         it("should add sort icons to columns being sorted", function() {
             var $header = $(".th-header:eq(4)", this.$pg);
             var $th = $header.parent().parent();
-            $header.trigger("click");
+            $header.trigger("mouseup");
             assert($th.find('.asc-icon').length, "should have an asc-icon");
             $header = $(".th-header:eq(4)", this.$pg);
             $th = $header.parent().parent();
-            $header.trigger("click");
+            $header.trigger("mouseup");
             assert($th.find('.desc-icon').length, "should have a desc-icon");
             $header = $(".th-header:eq(4)", this.$pg);
             $th = $header.parent().parent();
-            $header.trigger("click");
+            $header.trigger("mouseup");
             assert($th.find('.asc-icon, .desc-icon').length === 0, "should not have any icons");
+        });
+        
+        it("should have sortable columns", function() {
+            var $th = $(".th-header:eq(4)", this.$pg).parent().parent();
+            var down = $.Event("mousedown", {clientX: 300, originalEvent: { preventDefault: function() {} }});
+            $th.trigger(down);
+            var move = $.Event("mousemove", {clientX: 0});
+            $th.trigger(move);
+            $(window).trigger("mouseup");
+            assert.equal('height', this.tabled.columns.col_sorts[0], "did not change column sort order");
+        });
+        
+        it("should not sort rows when columns are being sorted", function() {
+            var $th = $(".th-header:eq(4)", this.$pg).parent().parent();
+            var down = $.Event("mousedown", {clientX: 300, originalEvent: { preventDefault: function() {} }});
+            $th.trigger(down);
+            var move = $.Event("mousemove", {clientX: 0});
+            $th.trigger(move);
+            $th.find(".th-header").trigger("mouseup");
+            assert.equal('', this.tabled.columns.get("height").get("sort_value"), "changed sort order when moving columns");
         });
                 
         afterEach(function(){
             this.tabled.remove();
         });
         
-    })
+    });
+    
+    describe("a tabled view with save_state enabled", function(){
+        beforeEach(function(){
+            this.Tabled = require('../');
+            
+            function inches2feet(inches, model){
+                var feet = Math.floor(inches/12);
+                var inches = inches % 12;
+                return feet + "'" + inches + '"';
+            }
+            
+            function feet_filter(term, value, formatted, model) {
+                if (term == "tall") return value > 70;
+                if (term == "short") return value < 69;
+                return true;
+            }
+            
+            this.columns = [
+                { id: "selector", key: "selected", label: "", select: true },
+                { id: "first_name", key: "first_name", label: "First Name", sort: "string", filter: "like",  },
+                { id: "last_name", key: "last_name", label: "Last Name", sort: "string", filter: "like",  },
+                { id: "age", key: "age", label: "Age", sort: "number", filter: "number" },
+                { id: "height", key: "height", label: "Height", format: inches2feet, filter: feet_filter, sort: "number" }
+            ];
+            this.collection = new Backbone.Collection([
+                { id: 1, first_name: "andy",  last_name: "perlitch", age: 24 , height: 69, selected: false },
+                { id: 2, first_name: "scott", last_name: "perlitch", age: 26 , height: 71, selected: false },
+                { id: 3, first_name: "tevya", last_name: "robbins", age: 32  , height: 68, selected: true }
+            ]);
+            this.tabled = new this.Tabled({
+                collection: this.collection,
+                columns: this.columns,
+                table_width: 500,
+                save_state: true,
+                id: "example1table"
+            });
+            this.$pg = $("#playground");
+            this.$pg.html(this.tabled.render().el);
+        });
+        
+        it("should save widths in stringified JSON", function(){
+            this.tabled.columns.at(0).set('width', 200);
+            assert(typeof localStorage.getItem('tabled.example1table') === "string");
+            assert.doesNotThrow(
+                function(){
+                    var obj = JSON.parse(localStorage.getItem('tabled.example1table'))
+                }
+            );
+            localStorage.removeItem('tabled.example1table');
+        });
+        
+        it("should save widths as an object with column ids as keys and widths as values", function() {
+            this.tabled.columns.at(0).set('width', 200);
+            var obj = JSON.parse(localStorage.getItem('tabled.example1table'));
+            var widths = obj.column_widths;
+            assert.equal("object", typeof widths, "Widths not stored as an object");
+            _.each(widths, function(val, key){
+                assert(this.tabled.columns.get(key), "One or more keys on the widths state object was not tied to a column")
+            }, this);
+        });
+        
+        it("should re-apply saved widths from previous sessions", function(){
+            assert.equal(this.tabled.columns.at(0).get('width'), 200, "Did not set width to saved state");
+            localStorage.removeItem('tabled.example1table');
+        });
+        
+        it("should save the order of columns if they change", function() {
+            this.tabled.columns.at(0).sortIndex(1);
+            var obj = JSON.parse(localStorage.getItem('tabled.example1table'));
+            assert(obj.hasOwnProperty('column_sorts'), "state object should have column_sorts property");
+            var sorts = obj.column_sorts;
+            assert.equal(sorts[1],'selector', "selector should be in the 2nd slot");
+        });
+        
+        it("should restore the column sort order from previous sessions", function() {
+            var obj = JSON.parse(localStorage.getItem('tabled.example1table'));
+            assert.equal(this.tabled.columns.at(1).get('id'), 'selector', "did not restore previous sort order");
+        });
+        
+        afterEach(function(){
+            this.tabled.remove();
+        });
+        
+    });
 })

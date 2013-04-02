@@ -34,11 +34,16 @@ var Tabled = BaseView.extend({
             columns: this.columns
         });
         
+        // State
+        if (this.options.save_state) {
+            this.restorePreviousState();
+        }
+        
         // Listeners
-        this.listenTo(this.columns, "change:width", this.adjustInner );
+        this.listenTo(this.columns, "change:width", this.onWidthChange );
         this.listenTo(this.columns, "change:filter_value", this.renderBody);
         this.listenTo(this.columns, "change:comparator", this.updateComparator);
-        this.listenTo(this.columns, "sort", this.render);
+        this.listenTo(this.columns, "sort", this.onColumnSort);
     },
     
     template: [
@@ -78,9 +83,28 @@ var Tabled = BaseView.extend({
         });
     },
     
-    setWidths: function() {
+    onWidthChange: function(){
+        this.adjustInnerDiv();
         
-        // TODO: check for saved_state widths
+        // Save the widths
+        if (!this.options.save_state) return;
+        var widths = this.columns.reduce(function(memo, column, key){
+            memo[column.get('id')] = column.get('width');
+            return memo;
+        }, {}, this);
+        this.state('column_widths', widths);
+    },
+    
+    onColumnSort: function() {
+        this.render();
+        
+        // Save sort
+        if (!this.options.save_state) return;
+        var sorts = this.columns.col_sorts;
+        this.state('column_sorts', sorts);
+    },
+    
+    setWidths: function() {
         
         // Table's width
         var totalWidth = this.options.table_width === 'auto' ? this.$el.width() : this.options.table_width;
@@ -109,11 +133,10 @@ var Tabled = BaseView.extend({
             column.set('width', width);
             adjustedWidth += width;
         });
-        this.currentWidth = adjustedWidth;
         // this.$el.width(adjustedWidth);
     },
     
-    adjustInner: function() {
+    adjustInnerDiv: function() {
         var width = this.columns.reduce(function(memo, column){
             var width = column.get('width') || column.get('min_column_width');
             return memo*1 + width*1;
@@ -151,6 +174,45 @@ var Tabled = BaseView.extend({
     updateComparator: function(fn) {
         this.collection.comparator = fn;
         if (typeof fn === "function") this.collection.sort();
+    },
+    
+    restorePreviousState: function() {
+        // Check widths
+        var widths = this.state('column_widths');
+        if (widths !== undefined) {
+            _.each(widths, function(val, key){
+                this.columns.get(key).set('width', val);
+            }, this);
+        }
+        
+        // Check for column sort order
+        var colsorts = this.state('column_sorts');
+        if (colsorts !== undefined) {
+            this.columns.col_sorts = colsorts;
+            this.columns.sort();
+        }
+    },
+    
+    state: function(key, value) {
+        var storage_key = 'tabled.'+this.options.id;
+        var store = this.store || localStorage.getItem(storage_key) || {};
+        
+        if (typeof store !== "object") {
+            try {
+                store = JSON.parse(store);
+            } catch(e) {
+                store = {};
+            }
+        }
+        this.store = store;
+        
+        if (value !== undefined) {
+            store[key] = value;
+            localStorage.setItem(storage_key, JSON.stringify(store));
+            return this;
+        } else {
+            return store[key];
+        }
     }
 
 });
