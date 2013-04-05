@@ -80,5 +80,6 @@ var intval = setInterval(function(){
         return;
     }
     var newRows = genRows(300);
-    collection.reset(newRows);
+    var method = collection.length ? 'set' : 'reset' ;
+    collection[method](newRows);
 }, 3000);
