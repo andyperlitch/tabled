@@ -190,9 +190,9 @@ describe("the Tabled module", function() {
                 { id: "height", key: "height", label: "Height", format: inches2feet, filter: feet_filter, sort: "number" }
             ];
             this.collection = new Backbone.Collection([
-                { id: 1, first_name: "andy",  last_name: "perlitch", age: 24 , height: 69, selected: false },
-                { id: 2, first_name: "scott", last_name: "perlitch", age: 26 , height: 71, selected: false },
-                { id: 3, first_name: "tevya", last_name: "robbins", age: 32  , height: 68, selected: true }
+                { id: 1, first_name: "andy",  last_name: "perlitch", age: 24 , height: 69 },
+                { id: 2, first_name: "scott", last_name: "perlitch", age: 26 , height: 71 },
+                { id: 3, first_name: "tevya", last_name: "robbins", age: 32  , height: 68 }
             ]);
             this.tabled = new this.Tabled({
                 collection: this.collection,
@@ -211,12 +211,13 @@ describe("the Tabled module", function() {
             assert.equal(3, $('.col-selector input[type="checkbox"]').length, "wrong number of checkboxes found");
         });
         
-        it("should render already selected rows as checked", function() {
-            assert($('.col-selector input[type="checkbox"]:eq(2)').is(":checked"), "initially selected row was not checked");
+        it("should make the 'selected' property on row models true when the cb is clicked", function() {
+            $('.col-selector input[type="checkbox"]:eq(2)').trigger("click");
+            assert.equal(true, this.collection.get(3).selected, "Row.selected was not true");
         });
         
         it("should emit events when a checkbox is clicked", function(done) {
-            this.collection.once("change:selected", function(model, value) {
+            this.collection.once("change_selected", function(model, value) {
                 assert(this.collection.get(model) !== undefined, "model that changed was not in the collection");
                 done();
             }, this);

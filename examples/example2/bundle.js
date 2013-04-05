@@ -873,8 +873,8 @@ exports.string = function(field){
 }
 },{}],9:[function(require,module,exports){
 exports.select = function(value, model) {
-    var select_key = model.get('select_key') || 'selected';
-    var checked = model.get(select_key) === true;
+    var select_key = 'selected';
+    var checked = model[select_key] === true;
     var $ret = $('<div class="cell-inner"><input type="checkbox"></div>');
     
     // Set checked
@@ -882,8 +882,10 @@ exports.select = function(value, model) {
     
     // Set click behavior
     $cb.on('click', function(evt) {
-        if ($cb.is(":checked")) model.set(select_key, true);
-        else model.set(select_key, false);
+        var selected = !! $cb.is(":checked");
+        model[select_key] = selected;
+        model.trigger('change_selected', model, selected);
+        if (model.collection) model.collection.trigger('change_selected');
     })
     
     return $ret;
