@@ -489,13 +489,12 @@ var ThCell = BaseView.extend({
         "mousedown .resize": "grabResizer",
         "dblclick .resize": "fitToContent",
         "mouseup .th-header": "changeColumnSort",
-        "mousedown .th-header": "grabColumn"
+        "mousedown": "grabColumn"
     },
     
     grabResizer: function(evt) {
         evt.preventDefault();
         evt.stopPropagation();
-        console.log("testing here");
         var self = this;
         var mouseX = evt.clientX;
         var columnWidth = this.model.get("width");
@@ -559,6 +558,7 @@ var ThCell = BaseView.extend({
     grabColumn: function(evt) {
         evt.preventDefault();
         evt.originalEvent.preventDefault();
+        console.log("grabbing column");
         
         var self = this;
         var mouseX = evt.clientX;
@@ -730,7 +730,8 @@ var Tdata = BaseView.extend({
     
     render: function() {
         this.$el.addClass('col-'+this.column.id).width(this.column.get('width'));
-        this.$el.html(this.template);
+        this.el.innerHTML = this.template;
+        // this.$el.html(this.template);
         this.$(".cell-inner").append( this.column.getFormatted(this.model) );
         return this;
     }
@@ -743,12 +744,14 @@ var Trow = BaseView.extend({
     
     render: function() {
         this.$el.empty();
+        
         this.collection.each(function(column){
             var tdView = new Tdata({
                 model: this.model,
                 column: column
             });
-            this.$el.append( tdView.render().el );
+            // this.$el.append( tdView.render().el );
+            this.el.appendChild( tdView.render().el );
         }, this);
         
         return this;
@@ -759,13 +762,16 @@ var Tbody = BaseView.extend({
     
     initialize: function(options) {
         this.columns = options.columns;
-        this.listenTo(this.collection, "reset", this.render);
+        this.listenTo(this.collection, "all", function(){
+            console.log("arguments: ", arguments);
+        });
         this.listenTo(this.collection, "sort", this.render);
     },
     
     render: function() {
         
         this.$el.empty();
+        var startTime = +new Date();
         this.collection.each(function(row){
             var rowView = new Trow({
                 model: row,
@@ -773,7 +779,8 @@ var Tbody = BaseView.extend({
             });
             if ( this.passesFilters(row) ) this.$el.append( rowView.render().el );
         }, this);
-        
+        var elapsedTime = +new Date() - startTime;
+        console.log("elapsedTime",elapsedTime/1000);
         return this;
     },
     

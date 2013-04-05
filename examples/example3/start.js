@@ -28,7 +28,7 @@ var tabled = new Tabled({
     collection: collection,
     columns: columns,
     table_width: 500,
-    id: "example3tabled",
+    id: "example3tabled.1",
     save_state: true
 });
 var $pg = $("#playground");
