@@ -58,16 +58,16 @@ var Tabled = BaseView.extend({
         );
 
         // Columns
-        this.columns = new Columns(this.options.columns, this.options );
+        this.columns = new Columns(this.options.columns,this.options);
         
         // Subviews
-        this.thead = new Thead({
+        this.subview("thead", new Thead({
             collection: this.columns
-        });
-        this.tbody = new Tbody({
+        }));
+        this.subview("tbody", new Tbody({
             collection: this.collection,
             columns: this.columns
-        });
+        }));
         
         // State
         if (this.options.save_state) {
@@ -100,21 +100,21 @@ var Tabled = BaseView.extend({
         this.setWidths();
         // (Re)render subviews
         this.assign({
-            '.thead': this.thead,
-            '.tbody': this.tbody
+            '.thead': 'thead',
+            '.tbody': 'tbody'
         })
         return this;
     },
     
     renderBody: function(){
         this.assign({
-            '.tbody': this.tbody
+            '.tbody': 'tbody'
         });
     },
     
     renderHead: function(){
         this.assign({
-            '.thead': this.thead
+            '.thead': 'thead'
         });
     },
     
@@ -268,8 +268,32 @@ var BaseView = Backbone.View.extend({
         }
         if (!selectors) return;
         _.each(selectors, function (view, selector) {
+            if (typeof view === "string") view = this.__subviews__[view];
             view.setElement(this.$(selector)).render();
         }, this);
+    },
+    
+    remove: function () {
+        this.trigger("removal");
+        this.unbind();
+        Backbone.View.prototype.remove.call(this);
+    },
+    
+    subview: function(key, view){
+        // Set up subview object
+        var sv = this.__subviews__ = this.__subviews__ || {};
+        
+        // Check if getting
+        if (view === undefined) return sv[key];
+        
+        // Add listener for removal event
+        view.listenTo(this, "removal", view.remove);
+        
+        // Set the key
+        sv[key] = view;
+        
+        // Allow chaining
+        return view
     }
     
 });
@@ -558,8 +582,7 @@ var ThCell = BaseView.extend({
     grabColumn: function(evt) {
         evt.preventDefault();
         evt.originalEvent.preventDefault();
-        console.log("grabbing column");
-        
+
         var self = this;
         var mouseX = evt.clientX;
         var offsetX = evt.offsetX;
@@ -626,6 +649,7 @@ var ThRow = BaseView.extend({
         this.collection.each(function(column){
             var view = new ThCell({ model: column });
             this.$el.append( view.render().el )
+            view.listenTo(this, "removal", view.remove);
         }, this);
         return this;
     }
@@ -675,7 +699,8 @@ var FilterRow = BaseView.extend({
         // render each th cell
         this.collection.each(function(column){
             var view = new FilterCell({ model: column });
-            this.$el.append( view.render().el )
+            this.$el.append( view.render().el );
+            view.listenTo(this, "removal", view.remove);
         }, this);
         return this;
     }
@@ -685,9 +710,11 @@ var FilterRow = BaseView.extend({
 var Thead = BaseView.extend({
     
     initialize: function(options) {
-        this.th_row     = new ThRow({ collection: this.collection });
+        // Setup subviews
+        this.subview("th_row", new ThRow({ collection: this.collection }));
+        
         if (this.needsFilterRow()) {
-            this.filter_row = new FilterRow({ collection: this.collection });
+            this.subview("filter_row", new FilterRow({ collection: this.collection }));
         }
     },
     
@@ -695,18 +722,16 @@ var Thead = BaseView.extend({
     
     render: function() {
         this.$el.html(this.template);
-        this.assign({ '.th-row' : this.th_row });
-        if (this.filter_row) this.assign({ '.filter-row' : this.filter_row });
+        this.assign({ '.th-row' : 'th_row' });
+        if (this.filter_row) this.assign({ '.filter-row' : 'filter_row' });
         else this.$('.filter-row').remove();
         return this;
     },
     
     needsFilterRow: function() {
-        var needs_it = false;
-        this.collection.each(function(column){
-            if (typeof column.get('filter') !== 'undefined') needs_it = true;
-        });
-        return needs_it;
+        return this.collection.some(function(column){
+            return (typeof column.get('filter') !== 'undefined')
+        })
     }
     
 });
@@ -743,6 +768,7 @@ var Trow = BaseView.extend({
     className: 'tr',
     
     render: function() {
+        this.trigger("removal");
         this.$el.empty();
         
         this.collection.each(function(column){
@@ -752,6 +778,7 @@ var Trow = BaseView.extend({
             });
             // this.$el.append( tdView.render().el );
             this.el.appendChild( tdView.render().el );
+            tdView.listenTo(this, "removal", tdView.remove);
         }, this);
         
         return this;
@@ -762,15 +789,13 @@ var Tbody = BaseView.extend({
     
     initialize: function(options) {
         this.columns = options.columns;
-        this.listenTo(this.collection, "all", function(){
-            console.log("arguments: ", arguments);
-        });
+        this.listenTo(this.collection, "reset", this.render);
         this.listenTo(this.collection, "sort", this.render);
     },
     
     render: function() {
-        
         this.$el.empty();
+        this.trigger("removal");
         var startTime = +new Date();
         this.collection.each(function(row){
             var rowView = new Trow({
@@ -778,6 +803,7 @@ var Tbody = BaseView.extend({
                 collection: this.columns
             });
             if ( this.passesFilters(row) ) this.$el.append( rowView.render().el );
+            rowView.listenTo(this, "removal", rowView.remove);
         }, this);
         var elapsedTime = +new Date() - startTime;
         console.log("elapsedTime",elapsedTime/1000);

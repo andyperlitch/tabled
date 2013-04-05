@@ -24,37 +24,41 @@ var collection = new Backbone.Collection([]);
 var tabled = new Tabled({
     collection: collection,
     columns: columns,
-    table_width: 500,
-    save_state: true
+    table_width: 500    
 });
 var $pg = $("#playground");
 tabled.render().$el.appendTo($pg);
 
-var fnames = [
-    "joe",
-    "fred",
-    "frank",
-    "jim",
-    "mike",
-    "gary",
-    "aziz"
-];
-
-var lnames = [
-    "sterling",
-    "smith",
-    "erickson",
-    "burke"
-];
-
 function genRow(id){
+    
+    var fnames = [
+        "joe",
+        "fred",
+        "frank",
+        "jim",
+        "mike",
+        "gary",
+        "aziz"
+    ];
+
+    var lnames = [
+        "sterling",
+        "smith",
+        "erickson",
+        "burke"
+    ];
+    
     var seed = Math.random();
     var seed2 = Math.random();
+    
+    var first_name = fnames[ Math.round( seed * (fnames.length -1) ) ];
+    var last_name = lnames[ Math.round( seed * (lnames.length -1) ) ];
+    
     return {
         id: id,
         selected: false,
-        first_name: fnames[ Math.round( seed * (fnames.length -1) ) ],
-        last_name: lnames[ Math.round( seed * (lnames.length -1) ) ],
+        first_name: first_name,
+        last_name: last_name,
         age: Math.ceil(seed * 75) + 15,
         height: Math.round( seed2 * 36 ) + 48,
         weight: Math.round( seed2 * 130 ) + 90

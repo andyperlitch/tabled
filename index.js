@@ -23,16 +23,16 @@ var Tabled = BaseView.extend({
         );
 
         // Columns
-        this.columns = new Columns(this.options.columns, this.options );
+        this.columns = new Columns(this.options.columns,this.options);
         
         // Subviews
-        this.thead = new Thead({
+        this.subview("thead", new Thead({
             collection: this.columns
-        });
-        this.tbody = new Tbody({
+        }));
+        this.subview("tbody", new Tbody({
             collection: this.collection,
             columns: this.columns
-        });
+        }));
         
         // State
         if (this.options.save_state) {
@@ -65,21 +65,21 @@ var Tabled = BaseView.extend({
         this.setWidths();
         // (Re)render subviews
         this.assign({
-            '.thead': this.thead,
-            '.tbody': this.tbody
+            '.thead': 'thead',
+            '.tbody': 'tbody'
         })
         return this;
     },
     
     renderBody: function(){
         this.assign({
-            '.tbody': this.tbody
+            '.tbody': 'tbody'
         });
     },
     
     renderHead: function(){
         this.assign({
-            '.thead': this.thead
+            '.thead': 'thead'
         });
     },
     
