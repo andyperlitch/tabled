@@ -697,6 +697,7 @@ var FilterRow = BaseView.extend({
     render: function() {
         // clear it
         this.$el.empty();
+        this.trigger("removal")
         
         // render each th cell
         this.collection.each(function(column){
@@ -725,7 +726,9 @@ var Thead = BaseView.extend({
     render: function() {
         this.$el.html(this.template);
         this.assign({ '.th-row' : 'th_row' });
-        if (this.filter_row) this.assign({ '.filter-row' : 'filter_row' });
+        if (this.subview('filter_row')) {
+            this.assign({ '.filter-row' : 'filter_row' });
+        }
         else this.$('.filter-row').remove();
         return this;
     },
@@ -741,46 +744,49 @@ exports = module.exports = Thead;
 },{"./BaseView":3}],6:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
-var Tdata = BaseView.extend({
-    
-    className: 'td',
-    
-    initialize: function(options){
-        this.column = options.column;
-        this.listenTo(this.column, "change:width", function(column, width){
-            this.$el.width(width);
-        });
-        this.listenTo(this.model, "change:"+this.column.get("key"), this.render );
-    },
-    
-    template: '<div class="cell-inner"></div>',
-    
-    render: function() {
-        this.$el.addClass('col-'+this.column.id).width(this.column.get('width'));
-        this.el.innerHTML = this.template;
-        // this.$el.html(this.template);
-        this.$(".cell-inner").append( this.column.getFormatted(this.model) );
-        return this;
-    }
-    
-});
+// var Tdata = BaseView.extend({
+//     
+//     className: 'td',
+//     
+//     initialize: function(options){
+//         this.column = options.column;
+//         this.listenTo(this.column, "change:width", function(column, width){
+//             this.$el.width(width);
+//         });
+//         this.listenTo(this.model, "change:"+this.column.get("key"), this.render );
+//     },
+//     
+//     template: '<div class="cell-inner"></div>',
+//     
+//     render: function() {
+//         this.$el.addClass('col-'+this.column.id).width(this.column.get('width'));
+//         this.el.innerHTML = this.template;
+//         // this.$el.html(this.template);
+//         this.$(".cell-inner").append( this.column.getFormatted(this.model) );
+//         return this;
+//     }
+//     
+// });
 
 var Trow = BaseView.extend({
     
     className: 'tr',
+    
+    initialize: function() {
+        this.listenTo(this.model, "change", this.render);
+    },
     
     render: function() {
         this.trigger("removal");
         this.$el.empty();
         
         this.collection.each(function(column){
-            var tdView = new Tdata({
-                model: this.model,
-                column: column
-            });
-            // this.$el.append( tdView.render().el );
-            this.el.appendChild( tdView.render().el );
-            tdView.listenTo(this, "removal", tdView.remove);
+            var id = column.get('id');
+            var width = column.get('width');
+            var formatted = column.getFormatted(this.model);
+            var $view = $('<div class="td col-'+id+'" style="width:'+width+'px"><div class="cell-inner"></div></div>');
+            $view.find('.cell-inner').append(formatted);
+            this.$el.append($view);
         }, this);
         
         return this;
@@ -793,6 +799,11 @@ var Tbody = BaseView.extend({
         this.columns = options.columns;
         this.listenTo(this.collection, "reset", this.render);
         this.listenTo(this.collection, "sort", this.render);
+        this.listenTo(this.columns, "change:width", this.adjustColumnWidth )
+    },
+    
+    adjustColumnWidth: function(model, newWidth, options){
+        this.$('.td.col-'+model.get("id")).width(newWidth);
     },
     
     render: function() {
