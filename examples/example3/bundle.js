@@ -40,27 +40,44 @@ var Column = require('./lib/Column').model;
 var Columns = require('./lib/Column').collection;
 var Thead = require('./lib/Thead');
 var Tbody = require('./lib/Tbody');
+
+var ConfigModel = Backbone.Model.extend({
+    defaults: {
+        // Makes table width and column widths adjustable
+        adjustable_width: true,
+        // Save the state of the table widths
+        save_state: false,
+        // Default minimum column width, in pixels
+        min_column_width: 30,
+        // Default width for the table itself. Either pixels or 'auto'
+        table_width: 'auto',
+        // Default max number of rows to render before scroll on tbody
+        max_rows: 30,
+        // Default offset for the tbody
+        offset: 0
+    },
+    
+    validate: function(attrs) {
+        var total_rows = attrs.collection.length;
+        
+        if ( attrs.offset > Math.max(attrs.max_rows, total_rows) - attrs.max_rows ) {
+            return "Offset cannot be that high.";
+        }
+    }
+});
+
 var Tabled = BaseView.extend({
     
     initialize: function(options) {
-        // Set options
-        this.options = _.extend(
-            {}, 
-            {
-                // Makes table width and column widths adjustable
-                adjustable_width: true,
-                // Save the state of the table widths
-                save_state: false,
-                // Default minimum column width, in pixels
-                min_column_width: 30,
-                // Default width for the table itself. Either pixels or 'auto'
-                table_width: 'auto'
-            }, 
-            options
-        );
+
+        // Ensure that this.collection (the data) is a backbone collection
+        if ( !(this.collection instanceof Backbone.Collection) ) throw "Tabled must be provided with a backbone collection as its data";
+        
+        // Config object
+        this.config = new ConfigModel(this.options);
 
         // Columns
-        this.columns = new Columns(this.options.columns,this.options);
+        this.columns = new Columns(this.config.get("columns"),{config: this.config});
         
         // Subviews
         this.subview("thead", new Thead({
@@ -72,13 +89,16 @@ var Tabled = BaseView.extend({
         }));
         
         // State
-        if (this.options.save_state) {
+        if (this.config.get("save_state")) {
             this.restorePreviousState();
         }
         
         // Listeners
         this.listenTo(this.columns, "change:width", this.onWidthChange );
-        this.listenTo(this.columns, "change:filter_value", this.renderBody);
+        this.listenTo(this.columns, "change:filter_value", function(){
+            this.config.set("offset", 0);
+            this.renderBody();
+        });
         this.listenTo(this.columns, "change:comparator", this.updateComparator);
         this.listenTo(this.columns, "sort", this.onColumnSort);
     },
@@ -124,7 +144,7 @@ var Tabled = BaseView.extend({
         this.adjustInnerDiv();
         
         // Save the widths
-        if (!this.options.save_state) return;
+        if (!this.config.get("save_state")) return;
         var widths = this.columns.reduce(function(memo, column, key){
             memo[column.get('id')] = column.get('width');
             return memo;
@@ -136,7 +156,7 @@ var Tabled = BaseView.extend({
         this.render();
         
         // Save sort
-        if (!this.options.save_state) return;
+        if (!this.config.get("save_state")) return;
         var sorts = this.columns.col_sorts;
         this.state('column_sorts', sorts);
     },
@@ -144,7 +164,7 @@ var Tabled = BaseView.extend({
     setWidths: function() {
         
         // Table's width
-        var totalWidth = this.options.table_width === 'auto' ? this.$el.width() : this.options.table_width;
+        var totalWidth = this.config.get("table_width") === 'auto' ? this.$el.width() : this.config.get("table_width");
         var makeDefault = [];
         var adjustedWidth = 0;
         this.columns.each(function(column, key){
@@ -164,7 +184,7 @@ var Tabled = BaseView.extend({
             }
         });
         var avg_width = makeDefault.length ? totalWidth/makeDefault.length : 0 ;
-        var defaultWidth = Math.max(Math.floor(avg_width), this.options.min_column_width) ;
+        var defaultWidth = Math.max(Math.floor(avg_width), this.config.get("min_column_width")) ;
         makeDefault.forEach(function(column, key){
             var width = Math.max(defaultWidth, column.get('min_column_width') || defaultWidth);
             column.set('width', width);
@@ -231,7 +251,7 @@ var Tabled = BaseView.extend({
     },
     
     state: function(key, value) {
-        var storage_key = 'tabled.'+this.options.id;
+        var storage_key = 'tabled.'+this.config.get("id");
         var store = this.store || localStorage.getItem(storage_key) || {};
         
         if (typeof store !== "object") {
@@ -381,7 +401,7 @@ var Columns = Backbone.Collection.extend({
     model: Column,
     
     initialize: function(models, options) {
-        this.options = options;
+        this.config = options.config;
         _.each(models, this.setMinWidth, this);
         this.row_sorts = this.getInitialRowSorts(models);
         this.col_sorts = this.getInitialColSorts(models);
@@ -394,28 +414,18 @@ var Columns = Backbone.Collection.extend({
         return idx1 - idx2;
     },
     
-    // resetComparator: function() {
-    //     this.comparator = function(col1, col2) {
-    //         console.log("this.col_sorts", this.col_sorts);
-    //         var idx1 = this.col_sorts.indexOf(col1.get("id"));
-    //         var idx2 = this.col_sorts.indexOf(col2.get("id"));
-    //         return idx1 - idx2;
-    //     }
-    //     this.sort();
-    // }
-    
     setMinWidth: function(model) {
         if (model.hasOwnProperty('min_column_width')) return;
         
-        model['min_column_width'] = this.options.min_column_width;
+        model['min_column_width'] = this.config.get("min_column_width");
     },
     
     getInitialRowSorts: function(models) {
         var self = this;
         var defaultSorts = _.pluck(models, "id");
         var sorts;
-        if (this.options.row_sorts) {
-            sorts = this.options.row_sorts;
+        if (this.config.get("row_sorts")) {
+            sorts = this.config.get("row_sorts");
             if ( ! (_.every(sorts, function(sort) { return defaultSorts.indexOf(sort) > -1 })) ) {
                 throw new Error("One or more values in the 'row_sorts' option does not match a column id");
             }
@@ -434,8 +444,8 @@ var Columns = Backbone.Collection.extend({
         var self = this;
         var defaultSorts = _.pluck(models, "id");
         var sorts;
-        if (this.options.col_sorts) {
-            sorts = this.options.col_sorts;
+        if (this.config.get("col_sorts")) {
+            sorts = this.config.get("col_sorts");
             if ( ! (_.every(sorts, function(sort) { return defaultSorts.indexOf(sort) > -1 })) ) {
                 throw new Error("One or more values in the 'col_sorts' option does not match a column id");
             }
@@ -529,7 +539,7 @@ var ThCell = BaseView.extend({
             var column = self.model;
             var change = evt.clientX - mouseX;
             var newWidth = columnWidth + change;
-            if ( newWidth < (column.get("min_column_width") || self.options.min_column_width) ) return;
+            if ( newWidth < column.get("min_column_width")) return;
             column.set({"width": newWidth}, {validate: true});
         }
         var cleanup_resize = function(evt) {
@@ -797,9 +807,12 @@ var Tbody = BaseView.extend({
     
     initialize: function(options) {
         this.columns = options.columns;
+        this.config = this.columns.config;
         this.listenTo(this.collection, "reset", this.render);
         this.listenTo(this.collection, "sort", this.render);
-        this.listenTo(this.columns, "change:width", this.adjustColumnWidth )
+        this.listenTo(this.collection, "update", this.render);
+        this.listenTo(this.columns, "change:width", this.adjustColumnWidth );
+        this.listenTo(this.config, "change:offset", this.render);
     },
     
     adjustColumnWidth: function(model, newWidth, options){
@@ -810,16 +823,28 @@ var Tbody = BaseView.extend({
         this.$el.empty();
         this.trigger("removal");
         var startTime = +new Date();
-        this.collection.each(function(row){
+        var total = 0;
+        var offset = this.config.get('offset');
+        var limit = this.config.get('max_rows');
+        this.collection.each(function(row, i){
+            
+            if ( this.passesFilters(row) ) ++total;
+            else return;
+            
+            if ( total <= offset ) return;
+            
+            if ( total > (offset + limit) ) return;
+
             var rowView = new Trow({
                 model: row,
                 collection: this.columns
             });
-            if ( this.passesFilters(row) ) this.$el.append( rowView.render().el );
+            this.$el.append( rowView.render().el );
             rowView.listenTo(this, "removal", rowView.remove);
+            
         }, this);
         var elapsedTime = +new Date() - startTime;
-        console.log("elapsedTime",elapsedTime/1000);
+        // console.log("elapsedTime",elapsedTime/1000);
         return this;
     },
     
@@ -832,6 +857,27 @@ var Tbody = BaseView.extend({
     
     passesFilter: function(row, column){
         return column.get('filter')( column.get('filter_value'), row.get(column.get('key')), column.getFormatted(row), row );
+    },
+    
+    events: {
+        "wheel": "onMouseWheel",
+        "mousewheel": "onMouseWheel"
+    },
+    
+    onMouseWheel: function(evt) {
+        // BigInteger
+        var self = this;
+        evt.preventDefault();
+        evt.originalEvent.preventDefault();
+        // normalize webkit/firefox scroll values
+        var deltaY = -evt.originalEvent.wheelDeltaY || evt.originalEvent.deltaY * 100;
+        var movement = Math.round(deltaY / 100);
+        if (isNaN(movement)) return;
+        var origOffset = this.config.get("offset");
+        var limit = this.config.get("max_rows");
+        var offset = Math.min( this.collection.length - limit, Math.max( 0, origOffset + movement));
+        
+        this.config.set({"offset": offset}, {validate: true} );
     }
     
 });

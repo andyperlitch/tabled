@@ -27,6 +27,18 @@ describe("the Tabled module", function() {
             assert(this.tabled instanceof Backbone.View, "was not a backbone view");
         });
         
+        it("should require that the data is a backbone collection", function(){
+            var Tabled = this.Tabled;
+            assert.throws(function() {
+                new Tabled({
+                    collection: [
+                        {"name": "a"},
+                        {"name": "b"}
+                    ]
+                })
+            })
+        });
+        
         it("should allow chaining from the render method", function() {
             var same = this.tabled.render();
             assert(same === this.tabled, "render did not return this for chaining");
@@ -93,7 +105,7 @@ describe("the Tabled module", function() {
         });
         
         it("should set the widths of all .td elements to greater than or equal to the minimum column width", function() {
-            var min_col_width = this.tabled.options.min_column_width;
+            var min_col_width = this.tabled.config.get("min_column_width");
             this.$pg.find(".th, .td").each(function(i, el) {
                 assert( $(this).width() >= min_col_width , "cell width(s) were not greater than 0 ("+i+")" );
             });
@@ -383,5 +395,105 @@ describe("the Tabled module", function() {
             this.tabled.remove();
         });
         
+    });
+    
+    describe("a tabled view with lots of updating rows", function() {
+        beforeEach(function() {
+            var Tabled = require('../');
+
+            function inches2feet(inches, model){
+                var feet = Math.floor(inches/12);
+                var inches = inches % 12;
+                return feet + "'" + inches + '"';
+            }
+
+            function feet_filter(term, value, formatted, model) {
+                if (term == "tall") return value > 70;
+                if (term == "short") return value < 69;
+                return true;
+            }
+
+            var columns = [
+                { id: "selector", key: "selected", label: "", select: true, width: 30, lock_width: true },
+                { id: "first_name", key: "first_name", label: "First Name", sort: "string", filter: "like",  },
+                { id: "last_name", key: "last_name", label: "Last Name", sort: "string", filter: "like",  },
+                { id: "age", key: "age", label: "Age", sort: "number", filter: "number" },
+                { id: "height", key: "height", label: "Height", format: inches2feet, filter: feet_filter, sort: "number" },
+                { id: "weight", key: "weight", label: "Weight", filter: "number", sort: "number" }
+            ];
+            this.collection = new Backbone.Collection([]);
+            this.tabled = new Tabled({
+                collection: this.collection,
+                columns: columns,
+                table_width: 500,
+                max_rows: 10
+            });
+            this.$pg = $("#playground");
+            this.tabled.render().$el.appendTo(this.$pg);
+
+            function genRow(id){
+
+                var fnames = [
+                    "joe",
+                    "fred",
+                    "frank",
+                    "jim",
+                    "mike",
+                    "gary",
+                    "aziz"
+                ];
+
+                var lnames = [
+                    "sterling",
+                    "smith",
+                    "erickson",
+                    "burke"
+                ];
+
+                var seed = Math.random();
+                var seed2 = Math.random();
+                var seed3 = Math.random();
+                var seed4 = Math.random();
+
+                var first_name = fnames[ Math.round( seed * (fnames.length -1) ) ];
+                var last_name = lnames[ Math.round( seed2 * (lnames.length -1) ) ];
+
+                return {
+                    id: id,
+                    selected: false,
+                    first_name: first_name,
+                    last_name: last_name,
+                    age: Math.ceil(seed3 * 75) + 15,
+                    height: Math.round( seed4 * 36 ) + 48,
+                    weight: Math.round( seed4 * 130 ) + 90
+                }
+            }
+
+            function genRows(num){
+                var retVal = [];
+                for (var i=0; i < num; i++) {
+                    retVal.push(genRow(i));
+                };
+                return retVal;
+            }
+            this.genRows = genRows;
+            this.collection.reset(genRows(200));
+        });
+        
+        it("should render no more than the max number of rows", function(){
+            console.log($(".tbody .tr", this.$pg).length);
+            assert( $(".tbody .tr", this.$pg).length <= 10 , "too many rows in the tbody");
+        });
+        
+        it("should react to change in offset", function() {
+            var init = $(".tbody .tr:eq(1)", this.$pg).html();
+            this.tabled.config.set('offset', 1);
+            var after = $(".tbody .tr:eq(0)", this.$pg).html();
+            assert.equal(init, after, "row 1 should have shifted to 0");
+        });
+        
+        afterEach(function() {
+            this.tabled.remove();
+        })
     });
 })
