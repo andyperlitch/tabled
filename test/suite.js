@@ -391,6 +391,17 @@ describe("the Tabled module", function() {
             assert.equal(this.tabled.columns.at(1).get('id'), 'selector', "did not restore previous sort order");
         });
         
+        it("should save the max_rows value if it has been changed", function() {
+            this.tabled.config.set('max_rows', 12);
+            var obj = JSON.parse(localStorage.getItem('tabled.example1table'));
+            assert.equal(obj.max_rows, 12, "max_rows was not saved");
+        });
+        
+        it("should restore the max_rows value upon re-initialization", function(){
+            console.log(this.tabled.config.get('max_rows'));
+            assert.equal(this.tabled.config.get('max_rows'), 12, "max_rows was not restored");
+        });
+        
         afterEach(function(){
             this.tabled.remove();
         });
@@ -481,7 +492,6 @@ describe("the Tabled module", function() {
         });
         
         it("should render no more than the max number of rows", function(){
-            console.log($(".tbody .tr", this.$pg).length);
             assert( $(".tbody .tr", this.$pg).length <= 10 , "too many rows in the tbody");
         });
         

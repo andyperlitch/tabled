@@ -298,7 +298,7 @@ var Tabled = BaseView.extend({
         // Check for max_rows
         var max_rows = this.state('max_rows');
         if (max_rows) {
-            this.config.get('max_rows');
+            this.config.set({'max_rows':max_rows},{validate:true});
         }
     },
     
