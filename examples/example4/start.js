@@ -25,7 +25,7 @@ var collection = new Backbone.Collection([]);
 var tabled = new Tabled({
     collection: collection,
     columns: columns,
-    table_width: 500    
+    table_width: 800    
 });
 var $pg = $("#playground");
 tabled.render().$el.appendTo($pg);
@@ -82,6 +82,9 @@ var intval = setInterval(function(){
     }
     var newRows = genRows(300);
     var method = collection.length ? 'set' : 'reset' ;
+    // var startTime = +new Date();
     collection[method](newRows);
+    // var endTime = +new Date();
+    // console.log((endTime - startTime)/1000);
     if (method === 'set') collection.trigger('update');
 }, 3000);

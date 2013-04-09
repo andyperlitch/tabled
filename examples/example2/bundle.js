@@ -38,8 +38,10 @@ var Column = require('./lib/Column').model;
 var Columns = require('./lib/Column').collection;
 var Thead = require('./lib/Thead');
 var Tbody = require('./lib/Tbody');
+var Scroller = require('./lib/Scroller');
 
 var ConfigModel = Backbone.Model.extend({
+    
     defaults: {
         // Makes table width and column widths adjustable
         adjustable_width: true,
@@ -52,16 +54,60 @@ var ConfigModel = Backbone.Model.extend({
         // Default max number of rows to render before scroll on tbody
         max_rows: 30,
         // Default offset for the tbody
-        offset: 0
+        offset: 0,
+        // Set in the rendering phase of the tbody (code smell...)
+        total_rows: 0
     },
     
     validate: function(attrs) {
-        var total_rows = attrs.collection.length;
-        
-        if ( attrs.offset > Math.max(attrs.max_rows, total_rows) - attrs.max_rows ) {
+        if ( attrs.offset > Math.max(attrs.max_rows, attrs.total_rows) - attrs.max_rows ) {
             return "Offset cannot be that high.";
         }
-    }
+        if (attrs.offset < 0) {
+            return "Offset must be greater than 0";
+        }
+    },
+    
+    getVisibleRows: function() {
+        var total = 0;
+        var offset = this.get('offset');
+        var limit = this.get('max_rows');
+        var rows_to_render = [];
+        this.get("collection").each(function(row, i){
+            
+            if ( this.passesFilters(row) ) ++total;
+            else return;
+            
+            if ( total <= offset ) return;
+            
+            if ( total > (offset + limit) ) return;
+            
+            rows_to_render.push(row);
+            
+        }, this);
+        
+        var prev_total = this.get('total_rows')*1;
+        if (total !== prev_total) {
+            this.set('total_rows', total)
+            var newOffset = Math.min(total - limit, offset);
+            if (newOffset === offset) this.trigger('update');
+            else this.set('offset', newOffset);
+            
+            return false;
+        }
+        
+        return rows_to_render;
+    },
+    passesFilters: function(row){
+        return this.columns.every(function(column){
+            if (column.get('filter_value') == "" || typeof column.get('filter') !== "function") return true;
+            return this.passesFilter(row, column);
+        }, this);
+    },
+    
+    passesFilter: function(row, column){
+        return column.get('filter')( column.get('filter_value'), row.get(column.get('key')), column.getFormatted(row), row );
+    },
 });
 
 var Tabled = BaseView.extend({
@@ -76,6 +122,7 @@ var Tabled = BaseView.extend({
 
         // Columns
         this.columns = new Columns(this.config.get("columns"),{config: this.config});
+        this.config.columns = this.columns;
         
         // Subviews
         this.subview("thead", new Thead({
@@ -84,6 +131,10 @@ var Tabled = BaseView.extend({
         this.subview("tbody", new Tbody({
             collection: this.collection,
             columns: this.columns
+        }));
+        this.subview('scroller', new Scroller({
+            model: this.config,
+            tbody: this.subview('tbody')
         }));
         
         // State
@@ -105,7 +156,10 @@ var Tabled = BaseView.extend({
         '<div class="tabled-ctnr"><div class="tabled-inner">',
         '<div class="tabled">',
         '<div class="thead"></div>',
+        '<div class="tbody-outer">',
         '<div class="tbody"></div>',
+        '<div class="scroller"></div>',
+        '</div>',
         '<div class="resize-table">',
         '<div class="resize-grip"></div><div class="resize-grip"></div><div class="resize-grip"></div>',
         '</div>',
@@ -121,8 +175,10 @@ var Tabled = BaseView.extend({
         // (Re)render subviews
         this.assign({
             '.thead': 'thead',
-            '.tbody': 'tbody'
-        })
+            '.tbody': 'tbody',
+            '.scroller': 'scroller'
+        });
+        
         return this;
     },
     
@@ -273,7 +329,7 @@ var Tabled = BaseView.extend({
 });
 
 exports = module.exports = Tabled
-},{"./lib/BaseView":3,"./lib/Column":4,"./lib/Thead":5,"./lib/Tbody":6}],3:[function(require,module,exports){
+},{"./lib/BaseView":3,"./lib/Column":4,"./lib/Thead":5,"./lib/Tbody":6,"./lib/Scroller":7}],3:[function(require,module,exports){
 var BaseView = Backbone.View.extend({
     
     // Assigns a subview to a jquery selector in this view's el
@@ -489,7 +545,7 @@ var Columns = Backbone.Collection.extend({
 
 exports.model = Column;
 exports.collection = Columns;
-},{"./Filters":7,"./Formats":8,"./Sorts":9}],5:[function(require,module,exports){
+},{"./Filters":8,"./Sorts":9,"./Formats":10}],5:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var ThCell = BaseView.extend({
@@ -801,6 +857,8 @@ var Trow = BaseView.extend({
     }
 });
 
+
+
 var Tbody = BaseView.extend({
     
     initialize: function(options) {
@@ -809,6 +867,7 @@ var Tbody = BaseView.extend({
         this.listenTo(this.collection, "reset", this.render);
         this.listenTo(this.collection, "sort", this.render);
         this.listenTo(this.collection, "update", this.render);
+        this.listenTo(this.config, "update", this.render);
         this.listenTo(this.columns, "change:width", this.adjustColumnWidth );
         this.listenTo(this.config, "change:offset", this.render);
     },
@@ -817,44 +876,24 @@ var Tbody = BaseView.extend({
         this.$('.td.col-'+model.get("id")).width(newWidth);
     },
     
+    // Renders the visible rows given the current offset and max_rows
+    // properties on the config object.
     render: function() {
         this.$el.empty();
         this.trigger("removal");
-        var startTime = +new Date();
-        var total = 0;
-        var offset = this.config.get('offset');
-        var limit = this.config.get('max_rows');
-        this.collection.each(function(row, i){
-            
-            if ( this.passesFilters(row) ) ++total;
-            else return;
-            
-            if ( total <= offset ) return;
-            
-            if ( total > (offset + limit) ) return;
-
+        var rows_to_render = this.config.getVisibleRows();
+        if (rows_to_render === false) return;
+        
+        rows_to_render.forEach(function(row){
             var rowView = new Trow({
                 model: row,
                 collection: this.columns
             });
             this.$el.append( rowView.render().el );
             rowView.listenTo(this, "removal", rowView.remove);
-            
         }, this);
-        var elapsedTime = +new Date() - startTime;
-        // console.log("elapsedTime",elapsedTime/1000);
+        this.trigger('rendered');
         return this;
-    },
-    
-    passesFilters: function(row){
-        return this.columns.every(function(column){
-            if (column.get('filter_value') == "" || typeof column.get('filter') !== "function") return true;
-            return this.passesFilter(row, column);
-        }, this);
-    },
-    
-    passesFilter: function(row, column){
-        return column.get('filter')( column.get('filter_value'), row.get(column.get('key')), column.getFormatted(row), row );
     },
     
     events: {
@@ -881,6 +920,72 @@ var Tbody = BaseView.extend({
 });
 exports = module.exports = Tbody;
 },{"./BaseView":3}],7:[function(require,module,exports){
+var BaseView = require('./BaseView');
+var Scroller = BaseView.extend({
+    
+    initialize: function(options) {
+        this.listenTo(this.model, "change:offset", this.updatePosition);
+        this.listenTo(options.tbody, "rendered", this.render);
+    },    
+    
+    template: '<div class="inner"></div>',
+    
+    render: function() {
+        this.$el.html(this.template);
+        this.updatePosition();
+        return this;
+    },
+    
+    updatePosition: function() {
+        var offset = this.model.get('offset');
+        var limit = this.model.get('max_rows');
+        var total = this.model.get('total_rows');
+        var actual_h = this.$el.parent().height();
+        var actual_r = actual_h / total;
+        var scroll_height = limit * actual_r;
+        var scroll_top = offset * actual_r;
+        
+        if (scroll_height < actual_h && total > limit) {
+            this.$(".inner").css({
+                height: scroll_height,
+                top: scroll_top
+            });
+        } else {
+            this.$(".inner").hide();
+        }
+    },
+    
+    events: {
+        "mousedown .inner": "grabScroller"
+    },
+    
+    grabScroller: function(evt){
+        evt.preventDefault();
+        var self = this;
+        var mouseY = evt.clientY;
+        var offsetY = evt.offsetY;
+        var ratio = this.model.get('total_rows') / this.$el.parent().height();
+        var initOffset = self.model.get('offset');
+        
+        function moveScroller(evt){
+            var curMouse = evt.clientY;
+            var change = curMouse - mouseY;
+            var newOffset = Math.max(Math.round(ratio * change) + initOffset, 0);
+            newOffset = Math.min(newOffset, self.model.get('total_rows') - self.model.get('max_rows'))
+            self.model.set({'offset':newOffset}, {validate: true});
+        }
+        
+        function releaseScroller(evt){
+            $(window).off("mousemove", moveScroller);
+        }
+        
+        $(window).on("mousemove", moveScroller);
+        $(window).one("mouseup", releaseScroller);
+    }
+});
+
+exports = module.exports = Scroller
+},{"./BaseView":3}],8:[function(require,module,exports){
 exports.like = function(term, value, computedValue, row) {
     term = term.toLowerCase();
     value = value.toLowerCase();
@@ -905,7 +1010,19 @@ exports.number = function(term, value) {
     if ( first_char == "=" ) return against_1 == value ;
     return value.toString().indexOf(term.toString()) > -1 ;
 }
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
+exports.number = function(field){
+    return function(row1,row2) { 
+        return row1.get(field)*1 - row2.get(field)*1;
+    }
+}
+exports.string = function(field){
+    return function(row1,row2) { 
+        if ( row1.get(field).toString().toLowerCase() == row2.get(field).toString().toLowerCase() ) return 0;
+        return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
+    }
+}
+},{}],10:[function(require,module,exports){
 exports.select = function(value, model) {
     var select_key = 'selected';
     var checked = model[select_key] === true;
@@ -923,18 +1040,6 @@ exports.select = function(value, model) {
     })
     
     return $ret;
-}
-},{}],9:[function(require,module,exports){
-exports.number = function(field){
-    return function(row1,row2) { 
-        return row1.get(field)*1 - row2.get(field)*1;
-    }
-}
-exports.string = function(field){
-    return function(row1,row2) { 
-        if ( row1.get(field).toString().toLowerCase() == row2.get(field).toString().toLowerCase() ) return 0;
-        return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
-    }
 }
 },{}]},{},[1])
 ;

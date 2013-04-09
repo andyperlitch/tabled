@@ -3,8 +3,10 @@ var Column = require('./lib/Column').model;
 var Columns = require('./lib/Column').collection;
 var Thead = require('./lib/Thead');
 var Tbody = require('./lib/Tbody');
+var Scroller = require('./lib/Scroller');
 
 var ConfigModel = Backbone.Model.extend({
+    
     defaults: {
         // Makes table width and column widths adjustable
         adjustable_width: true,
@@ -19,14 +21,15 @@ var ConfigModel = Backbone.Model.extend({
         // Default offset for the tbody
         offset: 0,
         // Set in the rendering phase of the tbody (code smell...)
-        totalRows: 0
+        total_rows: 0
     },
     
     validate: function(attrs) {
-        var total_rows = attrs.collection.length;
-        
-        if ( attrs.offset > Math.max(attrs.max_rows, total_rows) - attrs.max_rows ) {
+        if ( attrs.offset > Math.max(attrs.max_rows, attrs.total_rows) - attrs.max_rows ) {
             return "Offset cannot be that high.";
+        }
+        if (attrs.offset < 0) {
+            return "Offset must be greater than 0";
         }
     },
     
@@ -48,6 +51,15 @@ var ConfigModel = Backbone.Model.extend({
             
         }, this);
         
+        var prev_total = this.get('total_rows')*1;
+        if (total !== prev_total) {
+            this.set('total_rows', total)
+            var newOffset = Math.min(total - limit, offset);
+            if (newOffset === offset) this.trigger('update');
+            else this.set('offset', newOffset);
+            
+            return false;
+        }
         
         return rows_to_render;
     },
@@ -85,6 +97,10 @@ var Tabled = BaseView.extend({
             collection: this.collection,
             columns: this.columns
         }));
+        this.subview('scroller', new Scroller({
+            model: this.config,
+            tbody: this.subview('tbody')
+        }));
         
         // State
         if (this.config.get("save_state")) {
@@ -105,7 +121,10 @@ var Tabled = BaseView.extend({
         '<div class="tabled-ctnr"><div class="tabled-inner">',
         '<div class="tabled">',
         '<div class="thead"></div>',
+        '<div class="tbody-outer">',
         '<div class="tbody"></div>',
+        '<div class="scroller"></div>',
+        '</div>',
         '<div class="resize-table">',
         '<div class="resize-grip"></div><div class="resize-grip"></div><div class="resize-grip"></div>',
         '</div>',
@@ -121,8 +140,10 @@ var Tabled = BaseView.extend({
         // (Re)render subviews
         this.assign({
             '.thead': 'thead',
-            '.tbody': 'tbody'
-        })
+            '.tbody': 'tbody',
+            '.scroller': 'scroller'
+        });
+        
         return this;
     },
     
@@ -207,11 +228,18 @@ var Tabled = BaseView.extend({
         evt.preventDefault();
         evt.stopPropagation();
         var self = this;
+        
+        // Horizontal
         var mouseX = evt.clientX;
         var col_state = this.columns.reduce(function(memo, column, index){
             memo[column.get('id')] = column.get('width');
             return memo;
         },{},this);
+        
+        // Vertical 
+        var mouseY = evt.clientY;
+        
+        
         var table_resize = function(evt){
             var change = (evt.clientX - mouseX)/self.columns.length;
             self.columns.each(function(column){

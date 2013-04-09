@@ -41,6 +41,23 @@
   display: inline-block;
   box-shadow: 0 0 2px 1px red;
 }
+.tabled .tbody-outer {
+  position: relative;
+}
+.tabled .tbody-outer .scroller {
+  z-index: 1;
+  position: absolute;
+  top: 0;
+  height: 100%;
+  right: 0;
+  width: 10px;
+}
+.tabled .tbody-outer .scroller .inner {
+  width: 80%;
+  border-radius: 10px;
+  background-color: rgba(0, 0, 0, 0.5);
+  position: absolute;
+}
 .tabled input.filter {
   width: 100%;
   max-width: 200px;
@@ -105,4 +122,5 @@
   border-width: 13px;
   border-style: solid;
   cursor: se-resize;
+  z-index: 2;
 }
