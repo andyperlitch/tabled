@@ -35,7 +35,6 @@ var ConfigModel = Backbone.Model.extend({
             return "max_rows must atleast 1";
         }
     },
-    
     getVisibleRows: function() {
         var total = 0;
         var offset = this.get('offset');
@@ -72,10 +71,10 @@ var ConfigModel = Backbone.Model.extend({
             return this.passesFilter(row, column);
         }, this);
     },
-    
     passesFilter: function(row, column){
         return column.get('filter')( column.get('filter_value'), row.get(column.get('key')), column.getFormatted(row), row );
     },
+    
 });
 
 var Tabled = BaseView.extend({
@@ -219,7 +218,7 @@ var Tabled = BaseView.extend({
             column.set('width', width);
             adjustedWidth += width;
         });
-        // this.$el.width(adjustedWidth);
+        this.$('.tabled-inner').width(adjustedWidth);
     },
     
     adjustInnerDiv: function() {
@@ -275,6 +274,7 @@ var Tabled = BaseView.extend({
     },
     
     updateComparator: function(fn) {
+        console.log("listened");
         this.collection.comparator = fn;
         if (typeof fn === "function") this.collection.sort();
     },
@@ -294,6 +294,9 @@ var Tabled = BaseView.extend({
             this.columns.col_sorts = colsorts;
             this.columns.sort();
         }
+        
+        // Check for row sort order
+        // var rowsorts = 
         
         // Check for max_rows
         var max_rows = this.state('max_rows');

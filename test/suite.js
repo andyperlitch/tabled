@@ -331,7 +331,7 @@ describe("the Tabled module", function() {
             
             this.columns = [
                 { id: "selector", key: "selected", label: "", select: true },
-                { id: "first_name", key: "first_name", label: "First Name", sort: "string", filter: "like",  },
+                { id: "first_name", key: "first_name", label: "First Name", sort: "string", filter: "like", sort_value: "d" },
                 { id: "last_name", key: "last_name", label: "Last Name", sort: "string", filter: "like",  },
                 { id: "age", key: "age", label: "Age", sort: "number", filter: "number" },
                 { id: "height", key: "height", label: "Height", format: inches2feet, filter: feet_filter, sort: "number" }
@@ -346,10 +346,19 @@ describe("the Tabled module", function() {
                 columns: this.columns,
                 table_width: 500,
                 save_state: true,
-                id: "example1table"
+                id: "example1table",
+                row_sorts: ["first_name"]
             });
             this.$pg = $("#playground");
             this.$pg.html(this.tabled.render().el);
+        });
+        
+        it("should allow an initial sort to be specified", function() {
+            var arr = [];
+            $(".tbody .td.col-first_name .cell-inner").each(function(){
+                arr.push($(this).text());
+            });
+            assert(arr == ["tevya", "scott", "andy"], "Did not sort by initial settings");
         });
         
         it("should save widths in stringified JSON", function(){
@@ -398,10 +407,9 @@ describe("the Tabled module", function() {
         });
         
         it("should restore the max_rows value upon re-initialization", function(){
-            console.log(this.tabled.config.get('max_rows'));
             assert.equal(this.tabled.config.get('max_rows'), 12, "max_rows was not restored");
         });
-        
+                
         afterEach(function(){
             this.tabled.remove();
         });

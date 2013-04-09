@@ -1,6 +1,9 @@
 .tabled-ctnr {
   overflow: auto;
 }
+.tabled-ctnr .tabled-inner {
+  overflow: hidden;
+}
 .tabled {
   box-shadow: inset 0 1px 0 0 black;
   outline: none;

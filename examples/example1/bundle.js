@@ -133,7 +133,7 @@ var Tabled = BaseView.extend({
             this.config.set("offset", 0);
             this.renderBody();
         });
-        this.listenTo(this.config, "change:max_rows", this.renderBody);
+        this.listenTo(this.config, "change:max_rows", this.onMaxRowChange);
         this.listenTo(this.columns, "change:comparator", this.updateComparator);
         this.listenTo(this.columns, "sort", this.onColumnSort);
     },
@@ -191,6 +191,11 @@ var Tabled = BaseView.extend({
             return memo;
         }, {}, this);
         this.state('column_widths', widths);
+    },
+    
+    onMaxRowChange: function(model, value) {
+        this.renderBody();
+        this.state('max_rows', value);
     },
     
     onColumnSort: function() {
@@ -305,6 +310,15 @@ var Tabled = BaseView.extend({
         if (colsorts !== undefined) {
             this.columns.col_sorts = colsorts;
             this.columns.sort();
+        }
+        
+        // Check for row sort order
+        // var rowsorts = 
+        
+        // Check for max_rows
+        var max_rows = this.state('max_rows');
+        if (max_rows) {
+            this.config.set({'max_rows':max_rows},{validate:true});
         }
     },
     
@@ -549,7 +563,121 @@ var Columns = Backbone.Collection.extend({
 
 exports.model = Column;
 exports.collection = Columns;
-},{"./Filters":8,"./Sorts":9,"./Formats":10}],5:[function(require,module,exports){
+},{"./Filters":8,"./Sorts":9,"./Formats":10}],6:[function(require,module,exports){
+var BaseView = require('./BaseView');
+
+// var Tdata = BaseView.extend({
+//     
+//     className: 'td',
+//     
+//     initialize: function(options){
+//         this.column = options.column;
+//         this.listenTo(this.column, "change:width", function(column, width){
+//             this.$el.width(width);
+//         });
+//         this.listenTo(this.model, "change:"+this.column.get("key"), this.render );
+//     },
+//     
+//     template: '<div class="cell-inner"></div>',
+//     
+//     render: function() {
+//         this.$el.addClass('col-'+this.column.id).width(this.column.get('width'));
+//         this.el.innerHTML = this.template;
+//         // this.$el.html(this.template);
+//         this.$(".cell-inner").append( this.column.getFormatted(this.model) );
+//         return this;
+//     }
+//     
+// });
+
+var Trow = BaseView.extend({
+    
+    className: 'tr',
+    
+    initialize: function() {
+        this.listenTo(this.model, "change", this.render);
+    },
+    
+    render: function() {
+        this.trigger("removal");
+        this.$el.empty();
+        
+        this.collection.each(function(column){
+            var id = column.get('id');
+            var width = column.get('width');
+            var formatted = column.getFormatted(this.model);
+            var $view = $('<div class="td col-'+id+'" style="width:'+width+'px"><div class="cell-inner"></div></div>');
+            $view.find('.cell-inner').append(formatted);
+            this.$el.append($view);
+        }, this);
+        
+        return this;
+    }
+});
+
+
+
+var Tbody = BaseView.extend({
+    
+    initialize: function(options) {
+        this.columns = options.columns;
+        this.config = this.columns.config;
+        this.listenTo(this.collection, "reset", this.render);
+        this.listenTo(this.collection, "sort", this.render);
+        this.listenTo(this.collection, "update", this.render);
+        this.listenTo(this.config, "update", this.render);
+        this.listenTo(this.columns, "change:width", this.adjustColumnWidth );
+        this.listenTo(this.config, "change:offset", this.render);
+    },
+    
+    adjustColumnWidth: function(model, newWidth, options){
+        this.$('.td.col-'+model.get("id")).width(newWidth);
+    },
+    
+    // Renders the visible rows given the current offset and max_rows
+    // properties on the config object.
+    render: function() {
+        this.$el.empty();
+        this.trigger("removal");
+        var rows_to_render = this.config.getVisibleRows();
+        if (rows_to_render === false) return;
+        
+        rows_to_render.forEach(function(row){
+            var rowView = new Trow({
+                model: row,
+                collection: this.columns
+            });
+            this.$el.append( rowView.render().el );
+            rowView.listenTo(this, "removal", rowView.remove);
+        }, this);
+        this.trigger('rendered');
+        return this;
+    },
+    
+    events: {
+        "wheel": "onMouseWheel",
+        "mousewheel": "onMouseWheel"
+    },
+    
+    onMouseWheel: function(evt) {
+        // BigInteger
+        var self = this;
+        evt.preventDefault();
+        evt.originalEvent.preventDefault();
+        // normalize webkit/firefox scroll values
+        var deltaY = -evt.originalEvent.wheelDeltaY || evt.originalEvent.deltaY * 100;
+        var movement = Math.round(deltaY / 100);
+        if (isNaN(movement)) return;
+        var origOffset = this.config.get("offset");
+        var limit = this.config.get("max_rows");
+        var offset = Math.min( this.collection.length - limit, Math.max( 0, origOffset + movement));
+        
+        this.config.set({"offset": offset}, {validate: true} );
+    }
+    
+});
+exports = module.exports = Tbody;
+},{"./BaseView":3}],5:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var ThCell = BaseView.extend({
@@ -809,120 +937,6 @@ var Thead = BaseView.extend({
     
 });
 exports = module.exports = Thead;
-},{"./BaseView":3}],6:[function(require,module,exports){
-var BaseView = require('./BaseView');
-
-// var Tdata = BaseView.extend({
-//     
-//     className: 'td',
-//     
-//     initialize: function(options){
-//         this.column = options.column;
-//         this.listenTo(this.column, "change:width", function(column, width){
-//             this.$el.width(width);
-//         });
-//         this.listenTo(this.model, "change:"+this.column.get("key"), this.render );
-//     },
-//     
-//     template: '<div class="cell-inner"></div>',
-//     
-//     render: function() {
-//         this.$el.addClass('col-'+this.column.id).width(this.column.get('width'));
-//         this.el.innerHTML = this.template;
-//         // this.$el.html(this.template);
-//         this.$(".cell-inner").append( this.column.getFormatted(this.model) );
-//         return this;
-//     }
-//     
-// });
-
-var Trow = BaseView.extend({
-    
-    className: 'tr',
-    
-    initialize: function() {
-        this.listenTo(this.model, "change", this.render);
-    },
-    
-    render: function() {
-        this.trigger("removal");
-        this.$el.empty();
-        
-        this.collection.each(function(column){
-            var id = column.get('id');
-            var width = column.get('width');
-            var formatted = column.getFormatted(this.model);
-            var $view = $('<div class="td col-'+id+'" style="width:'+width+'px"><div class="cell-inner"></div></div>');
-            $view.find('.cell-inner').append(formatted);
-            this.$el.append($view);
-        }, this);
-        
-        return this;
-    }
-});
-
-
-
-var Tbody = BaseView.extend({
-    
-    initialize: function(options) {
-        this.columns = options.columns;
-        this.config = this.columns.config;
-        this.listenTo(this.collection, "reset", this.render);
-        this.listenTo(this.collection, "sort", this.render);
-        this.listenTo(this.collection, "update", this.render);
-        this.listenTo(this.config, "update", this.render);
-        this.listenTo(this.columns, "change:width", this.adjustColumnWidth );
-        this.listenTo(this.config, "change:offset", this.render);
-    },
-    
-    adjustColumnWidth: function(model, newWidth, options){
-        this.$('.td.col-'+model.get("id")).width(newWidth);
-    },
-    
-    // Renders the visible rows given the current offset and max_rows
-    // properties on the config object.
-    render: function() {
-        this.$el.empty();
-        this.trigger("removal");
-        var rows_to_render = this.config.getVisibleRows();
-        if (rows_to_render === false) return;
-        
-        rows_to_render.forEach(function(row){
-            var rowView = new Trow({
-                model: row,
-                collection: this.columns
-            });
-            this.$el.append( rowView.render().el );
-            rowView.listenTo(this, "removal", rowView.remove);
-        }, this);
-        this.trigger('rendered');
-        return this;
-    },
-    
-    events: {
-        "wheel": "onMouseWheel",
-        "mousewheel": "onMouseWheel"
-    },
-    
-    onMouseWheel: function(evt) {
-        // BigInteger
-        var self = this;
-        evt.preventDefault();
-        evt.originalEvent.preventDefault();
-        // normalize webkit/firefox scroll values
-        var deltaY = -evt.originalEvent.wheelDeltaY || evt.originalEvent.deltaY * 100;
-        var movement = Math.round(deltaY / 100);
-        if (isNaN(movement)) return;
-        var origOffset = this.config.get("offset");
-        var limit = this.config.get("max_rows");
-        var offset = Math.min( this.collection.length - limit, Math.max( 0, origOffset + movement));
-        
-        this.config.set({"offset": offset}, {validate: true} );
-    }
-    
-});
-exports = module.exports = Tbody;
 },{"./BaseView":3}],7:[function(require,module,exports){
 var BaseView = require('./BaseView');
 var Scroller = BaseView.extend({

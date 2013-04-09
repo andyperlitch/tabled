@@ -153,7 +153,7 @@ var Tabled = BaseView.extend({
             this.config.set("offset", 0);
             this.renderBody();
         });
-        this.listenTo(this.config, "change:max_rows", this.renderBody);
+        this.listenTo(this.config, "change:max_rows", this.onMaxRowChange);
         this.listenTo(this.columns, "change:comparator", this.updateComparator);
         this.listenTo(this.columns, "sort", this.onColumnSort);
     },
@@ -211,6 +211,11 @@ var Tabled = BaseView.extend({
             return memo;
         }, {}, this);
         this.state('column_widths', widths);
+    },
+    
+    onMaxRowChange: function(model, value) {
+        this.renderBody();
+        this.state('max_rows', value);
     },
     
     onColumnSort: function() {
@@ -325,6 +330,15 @@ var Tabled = BaseView.extend({
         if (colsorts !== undefined) {
             this.columns.col_sorts = colsorts;
             this.columns.sort();
+        }
+        
+        // Check for row sort order
+        // var rowsorts = 
+        
+        // Check for max_rows
+        var max_rows = this.state('max_rows');
+        if (max_rows) {
+            this.config.set({'max_rows':max_rows},{validate:true});
         }
     },
     
@@ -569,7 +583,7 @@ var Columns = Backbone.Collection.extend({
 
 exports.model = Column;
 exports.collection = Columns;
-},{"./Sorts":8,"./Filters":9,"./Formats":10}],5:[function(require,module,exports){
+},{"./Filters":8,"./Sorts":9,"./Formats":10}],5:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var ThCell = BaseView.extend({
@@ -1015,18 +1029,6 @@ var Scroller = BaseView.extend({
 
 exports = module.exports = Scroller
 },{"./BaseView":3}],8:[function(require,module,exports){
-exports.number = function(field){
-    return function(row1,row2) { 
-        return row1.get(field)*1 - row2.get(field)*1;
-    }
-}
-exports.string = function(field){
-    return function(row1,row2) { 
-        if ( row1.get(field).toString().toLowerCase() == row2.get(field).toString().toLowerCase() ) return 0;
-        return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
-    }
-}
-},{}],9:[function(require,module,exports){
 exports.like = function(term, value, computedValue, row) {
     term = term.toLowerCase();
     value = value.toLowerCase();
@@ -1050,6 +1052,18 @@ exports.number = function(term, value) {
     if ( first_char == "~" ) return Math.round(value) == against_1 ;
     if ( first_char == "=" ) return against_1 == value ;
     return value.toString().indexOf(term.toString()) > -1 ;
+}
+},{}],9:[function(require,module,exports){
+exports.number = function(field){
+    return function(row1,row2) { 
+        return row1.get(field)*1 - row2.get(field)*1;
+    }
+}
+exports.string = function(field){
+    return function(row1,row2) { 
+        if ( row1.get(field).toString().toLowerCase() == row2.get(field).toString().toLowerCase() ) return 0;
+        return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
+    }
 }
 },{}],10:[function(require,module,exports){
 exports.select = function(value, model) {

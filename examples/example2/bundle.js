@@ -151,7 +151,7 @@ var Tabled = BaseView.extend({
             this.config.set("offset", 0);
             this.renderBody();
         });
-        this.listenTo(this.config, "change:max_rows", this.renderBody);
+        this.listenTo(this.config, "change:max_rows", this.onMaxRowChange);
         this.listenTo(this.columns, "change:comparator", this.updateComparator);
         this.listenTo(this.columns, "sort", this.onColumnSort);
     },
@@ -209,6 +209,11 @@ var Tabled = BaseView.extend({
             return memo;
         }, {}, this);
         this.state('column_widths', widths);
+    },
+    
+    onMaxRowChange: function(model, value) {
+        this.renderBody();
+        this.state('max_rows', value);
     },
     
     onColumnSort: function() {
@@ -323,6 +328,15 @@ var Tabled = BaseView.extend({
         if (colsorts !== undefined) {
             this.columns.col_sorts = colsorts;
             this.columns.sort();
+        }
+        
+        // Check for row sort order
+        // var rowsorts = 
+        
+        // Check for max_rows
+        var max_rows = this.state('max_rows');
+        if (max_rows) {
+            this.config.set({'max_rows':max_rows},{validate:true});
         }
     },
     
