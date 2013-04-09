@@ -358,7 +358,8 @@ describe("the Tabled module", function() {
             $(".tbody .td.col-first_name .cell-inner").each(function(){
                 arr.push($(this).text());
             });
-            assert(arr == ["tevya", "scott", "andy"], "Did not sort by initial settings");
+            assert(arr.join(" ") == "tevya scott andy", "Did not sort by initial settings");
+            
         });
         
         it("should save widths in stringified JSON", function(){

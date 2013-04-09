@@ -118,6 +118,9 @@ var Tabled = BaseView.extend({
         this.listenTo(this.config, "change:max_rows", this.onMaxRowChange);
         this.listenTo(this.columns, "change:comparator", this.updateComparator);
         this.listenTo(this.columns, "sort", this.onColumnSort);
+        
+        // HACK: set up data comparator
+        this.columns.updateComparator();
     },
     
     template: [
@@ -274,7 +277,6 @@ var Tabled = BaseView.extend({
     },
     
     updateComparator: function(fn) {
-        console.log("listened");
         this.collection.comparator = fn;
         if (typeof fn === "function") this.collection.sort();
     },
