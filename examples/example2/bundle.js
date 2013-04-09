@@ -66,6 +66,9 @@ var ConfigModel = Backbone.Model.extend({
         if (attrs.offset < 0) {
             return "Offset must be greater than 0";
         }
+        if (attrs.max_rows < 1) {
+            return "max_rows must atleast 1";
+        }
     },
     
     getVisibleRows: function() {
@@ -148,6 +151,7 @@ var Tabled = BaseView.extend({
             this.config.set("offset", 0);
             this.renderBody();
         });
+        this.listenTo(this.config, "change:max_rows", this.renderBody);
         this.listenTo(this.columns, "change:comparator", this.updateComparator);
         this.listenTo(this.columns, "sort", this.onColumnSort);
     },
@@ -184,7 +188,8 @@ var Tabled = BaseView.extend({
     
     renderBody: function(){
         this.assign({
-            '.tbody': 'tbody'
+            '.tbody': 'tbody',
+            '.scroller': 'scroller'
         });
     },
     
@@ -263,16 +268,33 @@ var Tabled = BaseView.extend({
         evt.preventDefault();
         evt.stopPropagation();
         var self = this;
+        
+        // Horizontal
         var mouseX = evt.clientX;
         var col_state = this.columns.reduce(function(memo, column, index){
             memo[column.get('id')] = column.get('width');
             return memo;
         },{},this);
+        
+        // Vertical 
+        var mouseY = evt.clientY;
+        var row_height = $(".tr", this.$el).height();
+        var initMax = this.config.get('max_rows');
+        
         var table_resize = function(evt){
-            var change = (evt.clientX - mouseX)/self.columns.length;
+            // Horizontal
+            var changeX = (evt.clientX - mouseX)/self.columns.length;
             self.columns.each(function(column){
-                column.set({"width":col_state[column.get("id")]*1+change}, {validate:true});
-            })
+                column.set({"width":col_state[column.get("id")]*1+changeX}, {validate:true});
+            });
+            
+            // Vertical
+            var changeY = (evt.clientY - mouseY);
+            var abChangeY = Math.abs(changeY);
+            if ( abChangeY > row_height) {
+                abChangeY = Math.floor(abChangeY/row_height) * (changeY > 0 ? 1 : -1);
+                self.config.set({'max_rows':initMax + abChangeY}, {validate:true});
+            }
         } 
         var cleanup_resize = function(evt) {
             $(window).off("mousemove", table_resize);
@@ -943,6 +965,11 @@ var Scroller = BaseView.extend({
         var actual_h = this.$el.parent().height();
         var actual_r = actual_h / total;
         var scroll_height = limit * actual_r;
+        if (scroll_height < 10) {
+            var correction = 10 - scroll_height;
+            actual_h -= correction;
+            actual_r = actual_h / total;
+        }
         var scroll_top = offset * actual_r;
         
         if (scroll_height < actual_h && total > limit) {
