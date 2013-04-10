@@ -515,4 +515,22 @@ describe("the Tabled module", function() {
             this.tabled.remove();
         })
     });
+    
+    describe("the predefined formatting functions", function(){
+        beforeEach(function(){
+            this.Formats = require('../lib/Formats');
+        });
+        it("should be able to format a timestamp into 'X units ago'", function() {
+            var timeSince = this.Formats.timeSince;
+            var now = +new Date();
+            var one_second_ago = now - 1000;
+            var one_day_ago = now - 86400000;
+            assert.equal(timeSince(now),"a moment ago");
+            assert.equal(timeSince(one_second_ago),"1 second ago");
+            assert.equal(timeSince(one_day_ago),"1 day ago");
+        });
+        afterEach(function() {
+            delete this.Formats;
+        })
+    });
 })
