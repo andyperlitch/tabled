@@ -292,7 +292,7 @@ var Tabled = BaseView.extend({
         
         // Check for column sort order
         var colsorts = this.state('column_sorts');
-        if (colsorts !== undefined) {
+        if (colsorts !== undefined && colsorts.length === this.columns.length) {
             this.columns.col_sorts = colsorts;
             this.columns.sort();
         }
