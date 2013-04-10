@@ -72,7 +72,6 @@ var ConfigModel = Backbone.Model.extend({
             return "max_rows must atleast 1";
         }
     },
-    
     getVisibleRows: function() {
         var total = 0;
         var offset = this.get('offset');
@@ -109,10 +108,10 @@ var ConfigModel = Backbone.Model.extend({
             return this.passesFilter(row, column);
         }, this);
     },
-    
     passesFilter: function(row, column){
         return column.get('filter')( column.get('filter_value'), row.get(column.get('key')), column.getFormatted(row), row );
     },
+    
 });
 
 var Tabled = BaseView.extend({
@@ -131,7 +130,8 @@ var Tabled = BaseView.extend({
         
         // Subviews
         this.subview("thead", new Thead({
-            collection: this.columns
+            collection: this.columns,
+            config: this.config
         }));
         this.subview("tbody", new Tbody({
             collection: this.collection,
@@ -156,6 +156,9 @@ var Tabled = BaseView.extend({
         this.listenTo(this.config, "change:max_rows", this.onMaxRowChange);
         this.listenTo(this.columns, "change:comparator", this.updateComparator);
         this.listenTo(this.columns, "sort", this.onColumnSort);
+        
+        // HACK: set up data comparator
+        this.columns.updateComparator();
     },
     
     template: [
@@ -256,7 +259,7 @@ var Tabled = BaseView.extend({
             column.set('width', width);
             adjustedWidth += width;
         });
-        // this.$el.width(adjustedWidth);
+        this.$('.tabled-inner').width(adjustedWidth);
     },
     
     adjustInnerDiv: function() {
@@ -327,7 +330,7 @@ var Tabled = BaseView.extend({
         
         // Check for column sort order
         var colsorts = this.state('column_sorts');
-        if (colsorts !== undefined) {
+        if (colsorts !== undefined && colsorts.length === this.columns.length) {
             this.columns.col_sorts = colsorts;
             this.columns.sort();
         }
@@ -447,9 +450,12 @@ var Column = Backbone.Model.extend({
         
         // Check for format
         var select = this.get('select');
+        var format = this.get('format');
         if (select) {
             this.set("format", Formats.select );
             this.set("select_key", this.get("key"));
+        } else if (typeof format === "string" && typeof Formats[format] !== "undefined") {
+            this.set("format", Formats[format]);
         }
     },
     
@@ -577,13 +583,14 @@ var Columns = Backbone.Collection.extend({
             }
         }
         this.trigger("change:comparator", comparator);
+        
     }
     
 });
 
 exports.model = Column;
 exports.collection = Columns;
-},{"./Filters":8,"./Sorts":9,"./Formats":10}],5:[function(require,module,exports){
+},{"./Sorts":8,"./Filters":9,"./Formats":10}],5:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var ThCell = BaseView.extend({
@@ -775,6 +782,7 @@ var FilterCell = BaseView.extend({
         var markup = typeof fn === "function" ? this.template : "" ;
         this.$el.addClass('td col-'+this.model.get('id')).width(this.model.get('width'));
         this.$el.html(markup);
+        this.$("input").val(this.model.get('filter_value'));
         return this;
     },
     
@@ -815,12 +823,21 @@ var FilterRow = BaseView.extend({
 var Thead = BaseView.extend({
     
     initialize: function(options) {
+        // Set config
+        this.config = options.config;
+        
         // Setup subviews
         this.subview("th_row", new ThRow({ collection: this.collection }));
         
         if (this.needsFilterRow()) {
             this.subview("filter_row", new FilterRow({ collection: this.collection }));
         }
+        
+        // Listen for when offset is not zero
+        this.listenTo(this.config, "change:offset", function(model, offset){
+            var toggleClass = offset === 0 ? 'removeClass' : 'addClass' ;
+            this.$el[toggleClass]('overhang');
+        });
     },
     
     template: '<div class="tr th-row"></div><div class="tr filter-row"></div>',
@@ -942,8 +959,7 @@ var Tbody = BaseView.extend({
     onMouseWheel: function(evt) {
         // BigInteger
         var self = this;
-        evt.preventDefault();
-        evt.originalEvent.preventDefault();
+        
         // normalize webkit/firefox scroll values
         var deltaY = -evt.originalEvent.wheelDeltaY || evt.originalEvent.deltaY * 100;
         var movement = Math.round(deltaY / 100);
@@ -953,6 +969,12 @@ var Tbody = BaseView.extend({
         var offset = Math.min( this.collection.length - limit, Math.max( 0, origOffset + movement));
         
         this.config.set({"offset": offset}, {validate: true} );
+        
+        // Prevent default only when necessary
+        if (offset > 0 && offset < this.collection.length - limit) {
+            evt.preventDefault();
+            evt.originalEvent.preventDefault();
+        }
     }
     
 });
@@ -1029,6 +1051,18 @@ var Scroller = BaseView.extend({
 
 exports = module.exports = Scroller
 },{"./BaseView":3}],8:[function(require,module,exports){
+exports.number = function(field){
+    return function(row1,row2) { 
+        return row1.get(field)*1 - row2.get(field)*1;
+    }
+}
+exports.string = function(field){
+    return function(row1,row2) { 
+        if ( row1.get(field).toString().toLowerCase() == row2.get(field).toString().toLowerCase() ) return 0;
+        return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
+    }
+}
+},{}],9:[function(require,module,exports){
 exports.like = function(term, value, computedValue, row) {
     term = term.toLowerCase();
     value = value.toLowerCase();
@@ -1053,23 +1087,11 @@ exports.number = function(term, value) {
     if ( first_char == "=" ) return against_1 == value ;
     return value.toString().indexOf(term.toString()) > -1 ;
 }
-},{}],9:[function(require,module,exports){
-exports.number = function(field){
-    return function(row1,row2) { 
-        return row1.get(field)*1 - row2.get(field)*1;
-    }
-}
-exports.string = function(field){
-    return function(row1,row2) { 
-        if ( row1.get(field).toString().toLowerCase() == row2.get(field).toString().toLowerCase() ) return 0;
-        return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
-    }
-}
 },{}],10:[function(require,module,exports){
 exports.select = function(value, model) {
     var select_key = 'selected';
     var checked = model[select_key] === true;
-    var $ret = $('<div class="cell-inner"><input type="checkbox"></div>');
+    var $ret = $('<div class="cell-inner"><input type="checkbox" class="selectbox"></div>');
     
     // Set checked
     var $cb = $ret.find('input').prop('checked', checked);
@@ -1079,10 +1101,61 @@ exports.select = function(value, model) {
         var selected = !! $cb.is(":checked");
         model[select_key] = selected;
         model.trigger('change_selected', model, selected);
-        if (model.collection) model.collection.trigger('change_selected');
     })
     
     return $ret;
+}
+
+exports.commaInt = function(value) {
+    var parts = x.toString().split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return parts.join(".");
+}
+function timeSince(timestamp, compareDate, timeChunk) {
+    var now = compareDate === undefined ? +new Date() : compareDate;
+    var remaining = (timeChunk !== undefined) ? timeChunk : now - timestamp;
+    var string = "";
+    var separator = ", ";
+    var level = 0;
+    var max_levels = 3;
+    var milli_per_second = 1000;
+    var milli_per_minute = milli_per_second * 60;
+    var milli_per_hour = milli_per_minute * 60;
+    var milli_per_day = milli_per_hour * 24;
+    var milli_per_week = milli_per_day * 7;
+    var milli_per_month = milli_per_week * 4;
+    var milli_per_year = milli_per_day * 365;
+    
+    var levels = [
+    
+        { plural: "years", singular: "year", ms: milli_per_year },
+        { plural: "months", singular: "month", ms: milli_per_month },
+        { plural: "weeks", singular: "week", ms: milli_per_week },
+        { plural: "days", singular: "day", ms: milli_per_day },
+        { plural: "hours", singular: "hour", ms: milli_per_hour },
+        { plural: "minutes", singular: "minute", ms: milli_per_minute },
+        { plural: "seconds", singular: "second", ms: milli_per_second }
+    ];
+    
+    for (var i=0; i < levels.length; i++) {
+        if ( remaining < levels[i].ms ) continue;
+        level++;
+        var num = Math.floor( remaining / levels[i].ms );
+        var label = num == 1 ? levels[i].singular : levels[i].plural ;
+        string += num + " " + label + separator;
+        remaining %= levels[i].ms;
+        if ( level >= max_levels ) break;
+    };
+    
+    string = string.substring(0, string.length - separator.length);
+    return string;
+}
+exports.timeSince = function(value) {
+    if (/^\d+$/.test(value)) {
+        var newVal = timeSince(value) || "a moment";
+        return newVal + " ago";
+    }
+    return value;
 }
 },{}]},{},[1])
 ;

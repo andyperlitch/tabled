@@ -93,7 +93,8 @@ var Tabled = BaseView.extend({
         
         // Subviews
         this.subview("thead", new Thead({
-            collection: this.columns
+            collection: this.columns,
+            config: this.config
         }));
         this.subview("tbody", new Tbody({
             collection: this.collection,

@@ -52,7 +52,6 @@ var ConfigModel = Backbone.Model.extend({
             return "max_rows must atleast 1";
         }
     },
-    
     getVisibleRows: function() {
         var total = 0;
         var offset = this.get('offset');
@@ -89,10 +88,10 @@ var ConfigModel = Backbone.Model.extend({
             return this.passesFilter(row, column);
         }, this);
     },
-    
     passesFilter: function(row, column){
         return column.get('filter')( column.get('filter_value'), row.get(column.get('key')), column.getFormatted(row), row );
     },
+    
 });
 
 var Tabled = BaseView.extend({
@@ -111,7 +110,8 @@ var Tabled = BaseView.extend({
         
         // Subviews
         this.subview("thead", new Thead({
-            collection: this.columns
+            collection: this.columns,
+            config: this.config
         }));
         this.subview("tbody", new Tbody({
             collection: this.collection,
@@ -136,6 +136,9 @@ var Tabled = BaseView.extend({
         this.listenTo(this.config, "change:max_rows", this.onMaxRowChange);
         this.listenTo(this.columns, "change:comparator", this.updateComparator);
         this.listenTo(this.columns, "sort", this.onColumnSort);
+        
+        // HACK: set up data comparator
+        this.columns.updateComparator();
     },
     
     template: [
@@ -236,7 +239,7 @@ var Tabled = BaseView.extend({
             column.set('width', width);
             adjustedWidth += width;
         });
-        // this.$el.width(adjustedWidth);
+        this.$('.tabled-inner').width(adjustedWidth);
     },
     
     adjustInnerDiv: function() {
@@ -307,7 +310,7 @@ var Tabled = BaseView.extend({
         
         // Check for column sort order
         var colsorts = this.state('column_sorts');
-        if (colsorts !== undefined) {
+        if (colsorts !== undefined && colsorts.length === this.columns.length) {
             this.columns.col_sorts = colsorts;
             this.columns.sort();
         }
@@ -393,291 +396,7 @@ var BaseView = Backbone.View.extend({
 });
 
 exports = module.exports = BaseView
-},{}],4:[function(require,module,exports){
-var Filters = require("./Filters");
-var Sorts = require("./Sorts");
-var Formats = require("./Formats");
-var Column = Backbone.Model.extend({
-    
-    defaults: {
-        id: "",
-        key: "",
-        label: "",
-        sort: undefined,
-        filter: undefined,
-        format: undefined,
-        select: false,
-        filter_value: "",
-        sort_value: "",
-        lock_width: false
-    },
-    
-    initialize: function() {
-        // Check for filter
-        var filter = this.get("filter");
-        if (typeof filter === "string" && Filters.hasOwnProperty(filter)) {
-            this.set("filter", Filters[filter]);
-        }
-        
-        // Check for sort
-        var sort = this.get("sort");
-        if (typeof sort === "string" && Sorts.hasOwnProperty(sort)) {
-            this.set("sort", Sorts[sort](this.get("key")));
-        }
-        
-        // Check for format
-        var select = this.get('select');
-        if (select) {
-            this.set("format", Formats.select );
-            this.set("select_key", this.get("key"));
-        }
-    },
-    
-    serialize: function() {
-        return this.toJSON();
-    },
-    
-    validate: function(attrs) {
-        
-        if (attrs.width < attrs.min_column_width) return "A column width cannot be => 0";
-        
-        if (attrs.lock_width === true && attrs.width > 0) return "This column has a locked width";
-        
-    },
-    
-    getKey: function(model) {
-        return model.get(this.get('key'));
-    },
-    
-    getFormatted: function(model) {
-        var fn = this.get('format');
-        return (typeof fn === "function")
-            ? fn(this.getKey(model), model)
-            : this.getKey(model);
-    },
-    
-    sortIndex: function(newIndex) {
-        var sorts = this.collection.col_sorts;
-        if (typeof newIndex === "undefined") return sorts.indexOf(this.get("id"));
-        
-        var curIdx = this.sortIndex();
-        var id = sorts.splice(curIdx, 1)[0];
-        sorts.splice(newIndex, 0, id);
-        this.collection.sort();
-    }
-    
-});
-
-var Columns = Backbone.Collection.extend({
-    
-    model: Column,
-    
-    initialize: function(models, options) {
-        this.config = options.config;
-        _.each(models, this.setMinWidth, this);
-        this.row_sorts = this.getInitialRowSorts(models);
-        this.col_sorts = this.getInitialColSorts(models);
-        this.on("change:sort_value", this.onSortChange);
-    },
-    
-    comparator: function(col1, col2) {
-        var idx1 = this.col_sorts.indexOf(col1.get("id"));
-        var idx2 = this.col_sorts.indexOf(col2.get("id"));
-        return idx1 - idx2;
-    },
-    
-    setMinWidth: function(model) {
-        if (model.hasOwnProperty('min_column_width')) return;
-        
-        model['min_column_width'] = this.config.get("min_column_width");
-    },
-    
-    getInitialRowSorts: function(models) {
-        var self = this;
-        var defaultSorts = _.pluck(models, "id");
-        var sorts;
-        if (this.config.get("row_sorts")) {
-            sorts = this.config.get("row_sorts");
-            if ( ! (_.every(sorts, function(sort) { return defaultSorts.indexOf(sort) > -1 })) ) {
-                throw new Error("One or more values in the 'row_sorts' option does not match a column id");
-            }
-        } else {
-            sorts = _.reduce(models,function(memo, column){ 
-                if (column['sort_value']) 
-                    memo.push(column["id"]); 
-                
-                return memo;
-            },[]);
-        }
-        return sorts;
-    },
-    
-    getInitialColSorts: function(models) {
-        var self = this;
-        var defaultSorts = _.pluck(models, "id");
-        var sorts;
-        if (this.config.get("col_sorts")) {
-            sorts = this.config.get("col_sorts");
-            if ( ! (_.every(sorts, function(sort) { return defaultSorts.indexOf(sort) > -1 })) ) {
-                throw new Error("One or more values in the 'col_sorts' option does not match a column id");
-            }
-        } else {
-            sorts = defaultSorts;
-        }
-        return sorts;
-    },
-    
-    onSortChange: function(model, value) {
-        var id = model.get("id");
-        var index = this.row_sorts.indexOf(id);
-        if (index != -1) {
-            if (value === "") {
-                this.row_sorts.splice(index, 1);
-            }
-        } else {
-            this.row_sorts.push(id);
-        }
-        this.updateComparator();
-    },
-    
-    updateComparator: function() {
-        var comparator = false;
-        if (this.row_sorts.length !== 0){
-            var self = this;
-            var comparator = function(row1, row2) {
-                for (var i=0; i < self.row_sorts.length; i++) {
-                    var id = self.row_sorts[i];
-                    var column = self.get(id);
-                    var fn = column.get("sort");
-                    var value = column.get("sort_value");
-                    var sort_result = value == "a" ? fn(row1, row2) : fn(row2, row1) ;
-                    if (sort_result != 0) return sort_result;
-                };
-                return 0;
-            }
-        }
-        this.trigger("change:comparator", comparator);
-    }
-    
-});
-
-exports.model = Column;
-exports.collection = Columns;
-},{"./Filters":8,"./Sorts":9,"./Formats":10}],6:[function(require,module,exports){
-var BaseView = require('./BaseView');
-
-// var Tdata = BaseView.extend({
-//     
-//     className: 'td',
-//     
-//     initialize: function(options){
-//         this.column = options.column;
-//         this.listenTo(this.column, "change:width", function(column, width){
-//             this.$el.width(width);
-//         });
-//         this.listenTo(this.model, "change:"+this.column.get("key"), this.render );
-//     },
-//     
-//     template: '<div class="cell-inner"></div>',
-//     
-//     render: function() {
-//         this.$el.addClass('col-'+this.column.id).width(this.column.get('width'));
-//         this.el.innerHTML = this.template;
-//         // this.$el.html(this.template);
-//         this.$(".cell-inner").append( this.column.getFormatted(this.model) );
-//         return this;
-//     }
-//     
-// });
-
-var Trow = BaseView.extend({
-    
-    className: 'tr',
-    
-    initialize: function() {
-        this.listenTo(this.model, "change", this.render);
-    },
-    
-    render: function() {
-        this.trigger("removal");
-        this.$el.empty();
-        
-        this.collection.each(function(column){
-            var id = column.get('id');
-            var width = column.get('width');
-            var formatted = column.getFormatted(this.model);
-            var $view = $('<div class="td col-'+id+'" style="width:'+width+'px"><div class="cell-inner"></div></div>');
-            $view.find('.cell-inner').append(formatted);
-            this.$el.append($view);
-        }, this);
-        
-        return this;
-    }
-});
-
-
-
-var Tbody = BaseView.extend({
-    
-    initialize: function(options) {
-        this.columns = options.columns;
-        this.config = this.columns.config;
-        this.listenTo(this.collection, "reset", this.render);
-        this.listenTo(this.collection, "sort", this.render);
-        this.listenTo(this.collection, "update", this.render);
-        this.listenTo(this.config, "update", this.render);
-        this.listenTo(this.columns, "change:width", this.adjustColumnWidth );
-        this.listenTo(this.config, "change:offset", this.render);
-    },
-    
-    adjustColumnWidth: function(model, newWidth, options){
-        this.$('.td.col-'+model.get("id")).width(newWidth);
-    },
-    
-    // Renders the visible rows given the current offset and max_rows
-    // properties on the config object.
-    render: function() {
-        this.$el.empty();
-        this.trigger("removal");
-        var rows_to_render = this.config.getVisibleRows();
-        if (rows_to_render === false) return;
-        
-        rows_to_render.forEach(function(row){
-            var rowView = new Trow({
-                model: row,
-                collection: this.columns
-            });
-            this.$el.append( rowView.render().el );
-            rowView.listenTo(this, "removal", rowView.remove);
-        }, this);
-        this.trigger('rendered');
-        return this;
-    },
-    
-    events: {
-        "wheel": "onMouseWheel",
-        "mousewheel": "onMouseWheel"
-    },
-    
-    onMouseWheel: function(evt) {
-        // BigInteger
-        var self = this;
-        evt.preventDefault();
-        evt.originalEvent.preventDefault();
-        // normalize webkit/firefox scroll values
-        var deltaY = -evt.originalEvent.wheelDeltaY || evt.originalEvent.deltaY * 100;
-        var movement = Math.round(deltaY / 100);
-        if (isNaN(movement)) return;
-        var origOffset = this.config.get("offset");
-        var limit = this.config.get("max_rows");
-        var offset = Math.min( this.collection.length - limit, Math.max( 0, origOffset + movement));
-        
-        this.config.set({"offset": offset}, {validate: true} );
-    }
-    
-});
-exports = module.exports = Tbody;
-},{"./BaseView":3}],5:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var ThCell = BaseView.extend({
@@ -869,6 +588,7 @@ var FilterCell = BaseView.extend({
         var markup = typeof fn === "function" ? this.template : "" ;
         this.$el.addClass('td col-'+this.model.get('id')).width(this.model.get('width'));
         this.$el.html(markup);
+        this.$("input").val(this.model.get('filter_value'));
         return this;
     },
     
@@ -909,12 +629,21 @@ var FilterRow = BaseView.extend({
 var Thead = BaseView.extend({
     
     initialize: function(options) {
+        // Set config
+        this.config = options.config;
+        
         // Setup subviews
         this.subview("th_row", new ThRow({ collection: this.collection }));
         
         if (this.needsFilterRow()) {
             this.subview("filter_row", new FilterRow({ collection: this.collection }));
         }
+        
+        // Listen for when offset is not zero
+        this.listenTo(this.config, "change:offset", function(model, offset){
+            var toggleClass = offset === 0 ? 'removeClass' : 'addClass' ;
+            this.$el[toggleClass]('overhang');
+        });
     },
     
     template: '<div class="tr th-row"></div><div class="tr filter-row"></div>',
@@ -937,7 +666,300 @@ var Thead = BaseView.extend({
     
 });
 exports = module.exports = Thead;
-},{"./BaseView":3}],7:[function(require,module,exports){
+},{"./BaseView":3}],6:[function(require,module,exports){
+var BaseView = require('./BaseView');
+
+// var Tdata = BaseView.extend({
+//     
+//     className: 'td',
+//     
+//     initialize: function(options){
+//         this.column = options.column;
+//         this.listenTo(this.column, "change:width", function(column, width){
+//             this.$el.width(width);
+//         });
+//         this.listenTo(this.model, "change:"+this.column.get("key"), this.render );
+//     },
+//     
+//     template: '<div class="cell-inner"></div>',
+//     
+//     render: function() {
+//         this.$el.addClass('col-'+this.column.id).width(this.column.get('width'));
+//         this.el.innerHTML = this.template;
+//         // this.$el.html(this.template);
+//         this.$(".cell-inner").append( this.column.getFormatted(this.model) );
+//         return this;
+//     }
+//     
+// });
+
+var Trow = BaseView.extend({
+    
+    className: 'tr',
+    
+    initialize: function() {
+        this.listenTo(this.model, "change", this.render);
+    },
+    
+    render: function() {
+        this.trigger("removal");
+        this.$el.empty();
+        
+        this.collection.each(function(column){
+            var id = column.get('id');
+            var width = column.get('width');
+            var formatted = column.getFormatted(this.model);
+            var $view = $('<div class="td col-'+id+'" style="width:'+width+'px"><div class="cell-inner"></div></div>');
+            $view.find('.cell-inner').append(formatted);
+            this.$el.append($view);
+        }, this);
+        
+        return this;
+    }
+});
+
+
+
+var Tbody = BaseView.extend({
+    
+    initialize: function(options) {
+        this.columns = options.columns;
+        this.config = this.columns.config;
+        this.listenTo(this.collection, "reset", this.render);
+        this.listenTo(this.collection, "sort", this.render);
+        this.listenTo(this.collection, "update", this.render);
+        this.listenTo(this.config, "update", this.render);
+        this.listenTo(this.columns, "change:width", this.adjustColumnWidth );
+        this.listenTo(this.config, "change:offset", this.render);
+    },
+    
+    adjustColumnWidth: function(model, newWidth, options){
+        this.$('.td.col-'+model.get("id")).width(newWidth);
+    },
+    
+    // Renders the visible rows given the current offset and max_rows
+    // properties on the config object.
+    render: function() {
+        this.$el.empty();
+        this.trigger("removal");
+        var rows_to_render = this.config.getVisibleRows();
+        if (rows_to_render === false) return;
+        
+        rows_to_render.forEach(function(row){
+            var rowView = new Trow({
+                model: row,
+                collection: this.columns
+            });
+            this.$el.append( rowView.render().el );
+            rowView.listenTo(this, "removal", rowView.remove);
+        }, this);
+        this.trigger('rendered');
+        return this;
+    },
+    
+    events: {
+        "wheel": "onMouseWheel",
+        "mousewheel": "onMouseWheel"
+    },
+    
+    onMouseWheel: function(evt) {
+        // BigInteger
+        var self = this;
+        
+        // normalize webkit/firefox scroll values
+        var deltaY = -evt.originalEvent.wheelDeltaY || evt.originalEvent.deltaY * 100;
+        var movement = Math.round(deltaY / 100);
+        if (isNaN(movement)) return;
+        var origOffset = this.config.get("offset");
+        var limit = this.config.get("max_rows");
+        var offset = Math.min( this.collection.length - limit, Math.max( 0, origOffset + movement));
+        
+        this.config.set({"offset": offset}, {validate: true} );
+        
+        // Prevent default only when necessary
+        if (offset > 0 && offset < this.collection.length - limit) {
+            evt.preventDefault();
+            evt.originalEvent.preventDefault();
+        }
+    }
+    
+});
+exports = module.exports = Tbody;
+},{"./BaseView":3}],4:[function(require,module,exports){
+var Filters = require("./Filters");
+var Sorts = require("./Sorts");
+var Formats = require("./Formats");
+var Column = Backbone.Model.extend({
+    
+    defaults: {
+        id: "",
+        key: "",
+        label: "",
+        sort: undefined,
+        filter: undefined,
+        format: undefined,
+        select: false,
+        filter_value: "",
+        sort_value: "",
+        lock_width: false
+    },
+    
+    initialize: function() {
+        // Check for filter
+        var filter = this.get("filter");
+        if (typeof filter === "string" && Filters.hasOwnProperty(filter)) {
+            this.set("filter", Filters[filter]);
+        }
+        
+        // Check for sort
+        var sort = this.get("sort");
+        if (typeof sort === "string" && Sorts.hasOwnProperty(sort)) {
+            this.set("sort", Sorts[sort](this.get("key")));
+        }
+        
+        // Check for format
+        var select = this.get('select');
+        var format = this.get('format');
+        if (select) {
+            this.set("format", Formats.select );
+            this.set("select_key", this.get("key"));
+        } else if (typeof format === "string" && typeof Formats[format] !== "undefined") {
+            this.set("format", Formats[format]);
+        }
+    },
+    
+    serialize: function() {
+        return this.toJSON();
+    },
+    
+    validate: function(attrs) {
+        
+        if (attrs.width < attrs.min_column_width) return "A column width cannot be => 0";
+        
+        if (attrs.lock_width === true && attrs.width > 0) return "This column has a locked width";
+        
+    },
+    
+    getKey: function(model) {
+        return model.get(this.get('key'));
+    },
+    
+    getFormatted: function(model) {
+        var fn = this.get('format');
+        return (typeof fn === "function")
+            ? fn(this.getKey(model), model)
+            : this.getKey(model);
+    },
+    
+    sortIndex: function(newIndex) {
+        var sorts = this.collection.col_sorts;
+        if (typeof newIndex === "undefined") return sorts.indexOf(this.get("id"));
+        
+        var curIdx = this.sortIndex();
+        var id = sorts.splice(curIdx, 1)[0];
+        sorts.splice(newIndex, 0, id);
+        this.collection.sort();
+    }
+    
+});
+
+var Columns = Backbone.Collection.extend({
+    
+    model: Column,
+    
+    initialize: function(models, options) {
+        this.config = options.config;
+        _.each(models, this.setMinWidth, this);
+        this.row_sorts = this.getInitialRowSorts(models);
+        this.col_sorts = this.getInitialColSorts(models);
+        this.on("change:sort_value", this.onSortChange);
+    },
+    
+    comparator: function(col1, col2) {
+        var idx1 = this.col_sorts.indexOf(col1.get("id"));
+        var idx2 = this.col_sorts.indexOf(col2.get("id"));
+        return idx1 - idx2;
+    },
+    
+    setMinWidth: function(model) {
+        if (model.hasOwnProperty('min_column_width')) return;
+        
+        model['min_column_width'] = this.config.get("min_column_width");
+    },
+    
+    getInitialRowSorts: function(models) {
+        var self = this;
+        var defaultSorts = _.pluck(models, "id");
+        var sorts;
+        if (this.config.get("row_sorts")) {
+            sorts = this.config.get("row_sorts");
+            if ( ! (_.every(sorts, function(sort) { return defaultSorts.indexOf(sort) > -1 })) ) {
+                throw new Error("One or more values in the 'row_sorts' option does not match a column id");
+            }
+        } else {
+            sorts = _.reduce(models,function(memo, column){ 
+                if (column['sort_value']) 
+                    memo.push(column["id"]); 
+                
+                return memo;
+            },[]);
+        }
+        return sorts;
+    },
+    
+    getInitialColSorts: function(models) {
+        var self = this;
+        var defaultSorts = _.pluck(models, "id");
+        var sorts;
+        if (this.config.get("col_sorts")) {
+            sorts = this.config.get("col_sorts");
+            if ( ! (_.every(sorts, function(sort) { return defaultSorts.indexOf(sort) > -1 })) ) {
+                throw new Error("One or more values in the 'col_sorts' option does not match a column id");
+            }
+        } else {
+            sorts = defaultSorts;
+        }
+        return sorts;
+    },
+    
+    onSortChange: function(model, value) {
+        var id = model.get("id");
+        var index = this.row_sorts.indexOf(id);
+        if (index != -1) {
+            if (value === "") {
+                this.row_sorts.splice(index, 1);
+            }
+        } else {
+            this.row_sorts.push(id);
+        }
+        this.updateComparator();
+    },
+    
+    updateComparator: function() {
+        var comparator = false;
+        if (this.row_sorts.length !== 0){
+            var self = this;
+            var comparator = function(row1, row2) {
+                for (var i=0; i < self.row_sorts.length; i++) {
+                    var id = self.row_sorts[i];
+                    var column = self.get(id);
+                    var fn = column.get("sort");
+                    var value = column.get("sort_value");
+                    var sort_result = value == "a" ? fn(row1, row2) : fn(row2, row1) ;
+                    if (sort_result != 0) return sort_result;
+                };
+                return 0;
+            }
+        }
+        this.trigger("change:comparator", comparator);
+        
+    }
+    
+});
+
+exports.model = Column;
+exports.collection = Columns;
+},{"./Filters":8,"./Sorts":9,"./Formats":10}],7:[function(require,module,exports){
 var BaseView = require('./BaseView');
 var Scroller = BaseView.extend({
     
@@ -1049,7 +1071,7 @@ exports.string = function(field){
 exports.select = function(value, model) {
     var select_key = 'selected';
     var checked = model[select_key] === true;
-    var $ret = $('<div class="cell-inner"><input type="checkbox"></div>');
+    var $ret = $('<div class="cell-inner"><input type="checkbox" class="selectbox"></div>');
     
     // Set checked
     var $cb = $ret.find('input').prop('checked', checked);
@@ -1059,10 +1081,61 @@ exports.select = function(value, model) {
         var selected = !! $cb.is(":checked");
         model[select_key] = selected;
         model.trigger('change_selected', model, selected);
-        if (model.collection) model.collection.trigger('change_selected');
     })
     
     return $ret;
+}
+
+exports.commaInt = function(value) {
+    var parts = x.toString().split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return parts.join(".");
+}
+function timeSince(timestamp, compareDate, timeChunk) {
+    var now = compareDate === undefined ? +new Date() : compareDate;
+    var remaining = (timeChunk !== undefined) ? timeChunk : now - timestamp;
+    var string = "";
+    var separator = ", ";
+    var level = 0;
+    var max_levels = 3;
+    var milli_per_second = 1000;
+    var milli_per_minute = milli_per_second * 60;
+    var milli_per_hour = milli_per_minute * 60;
+    var milli_per_day = milli_per_hour * 24;
+    var milli_per_week = milli_per_day * 7;
+    var milli_per_month = milli_per_week * 4;
+    var milli_per_year = milli_per_day * 365;
+    
+    var levels = [
+    
+        { plural: "years", singular: "year", ms: milli_per_year },
+        { plural: "months", singular: "month", ms: milli_per_month },
+        { plural: "weeks", singular: "week", ms: milli_per_week },
+        { plural: "days", singular: "day", ms: milli_per_day },
+        { plural: "hours", singular: "hour", ms: milli_per_hour },
+        { plural: "minutes", singular: "minute", ms: milli_per_minute },
+        { plural: "seconds", singular: "second", ms: milli_per_second }
+    ];
+    
+    for (var i=0; i < levels.length; i++) {
+        if ( remaining < levels[i].ms ) continue;
+        level++;
+        var num = Math.floor( remaining / levels[i].ms );
+        var label = num == 1 ? levels[i].singular : levels[i].plural ;
+        string += num + " " + label + separator;
+        remaining %= levels[i].ms;
+        if ( level >= max_levels ) break;
+    };
+    
+    string = string.substring(0, string.length - separator.length);
+    return string;
+}
+exports.timeSince = function(value) {
+    if (/^\d+$/.test(value)) {
+        var newVal = timeSince(value) || "a moment";
+        return newVal + " ago";
+    }
+    return value;
 }
 },{}]},{},[1])
 ;
