@@ -224,7 +224,7 @@ describe("the Tabled module", function() {
         });
         
         it("should make the 'selected' property on row models true when the cb is clicked", function() {
-            $('.col-selector input[type="checkbox"]:eq(2)').trigger("click");
+            $('.col-selector input[type="checkbox"]:eq(2)').trigger("mouseup");
             assert.equal(true, this.collection.get(3).selected, "Row.selected was not true");
         });
         
@@ -233,7 +233,7 @@ describe("the Tabled module", function() {
                 assert(this.collection.get(model) !== undefined, "model that changed was not in the collection");
                 done();
             }, this);
-            $('.col-selector input[type="checkbox"]:eq(0)').trigger('click');
+            $('.col-selector input[type="checkbox"]:eq(0)').trigger('mouseup');
         });
 
         it("should lock the width of the columns that have lock_width enabled", function() {
