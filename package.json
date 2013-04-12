@@ -25,7 +25,7 @@
     },
     "dependencies": {
         "browserify": ">=2.8.0",
-        "bormat": ""
+        "bormat": "0.0.1"
     },
     "jam": {
         "packageDir": "./vendor",
