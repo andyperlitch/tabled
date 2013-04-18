@@ -269,8 +269,11 @@ var Tabled = BaseView.extend({
     },
     
     events: {
-        'mousedown .resize-table': 'grabTableResizer'
+        'mousedown .resize-table': 'grabTableResizer',
+        'dblclick .resize-table':  'resizeTableToCtnr'
     },
+    
+    
     
     grabTableResizer: function(evt){
         evt.preventDefault();
@@ -314,6 +317,22 @@ var Tabled = BaseView.extend({
         $(window).one("mouseup", cleanup_resize);
     },
     
+    resizeTableToCtnr: function() {
+        var newWidth = this.$el.parent().width();
+        var curWidth = this.$('.tabled').width();
+        var delta = newWidth - curWidth;
+        var resizableColCount = this.columns.reduce(function(memo, column) {
+            return column.get('lock_width') ? memo : ++memo ;
+        }, 0);
+        var change = delta / resizableColCount;
+        console.log("change",change);
+        this.columns.each(function(col){
+            var curWidth = col.get("width");
+            col.set({"width": change*1 + curWidth*1}, {validate: true});
+            console.log("change*1 + curWidth*1", change*1 + curWidth*1);
+        });
+    },
+    
     updateComparator: function(fn) {
         this.collection.comparator = fn;
         if (typeof fn === "function") this.collection.sort();
@@ -334,9 +353,6 @@ var Tabled = BaseView.extend({
             this.columns.col_sorts = colsorts;
             this.columns.sort();
         }
-        
-        // Check for row sort order
-        // var rowsorts = 
         
         // Check for max_rows
         var max_rows = this.state('max_rows');
@@ -370,7 +386,7 @@ var Tabled = BaseView.extend({
 });
 
 exports = module.exports = Tabled
-},{"./lib/Column":3,"./lib/BaseView":4,"./lib/Thead":5,"./lib/Tbody":6,"./lib/Scroller":7}],4:[function(require,module,exports){
+},{"./lib/BaseView":3,"./lib/Column":4,"./lib/Thead":5,"./lib/Tbody":6,"./lib/Scroller":7}],3:[function(require,module,exports){
 var BaseView = Backbone.View.extend({
     
     // Assigns a subview to a jquery selector in this view's el
@@ -416,7 +432,7 @@ var BaseView = Backbone.View.extend({
 });
 
 exports = module.exports = BaseView
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 var Filters = require("./Filters");
 var Sorts = require("./Sorts");
 var Formats = require("./Formats");
@@ -860,7 +876,7 @@ var Thead = BaseView.extend({
     
 });
 exports = module.exports = Thead;
-},{"./BaseView":4}],6:[function(require,module,exports){
+},{"./BaseView":3}],6:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var Trow = BaseView.extend({
@@ -955,7 +971,7 @@ var Tbody = BaseView.extend({
     
 });
 exports = module.exports = Tbody;
-},{"./BaseView":4}],7:[function(require,module,exports){
+},{"./BaseView":3}],7:[function(require,module,exports){
 var BaseView = require('./BaseView');
 var Scroller = BaseView.extend({
     
@@ -1026,7 +1042,7 @@ var Scroller = BaseView.extend({
 });
 
 exports = module.exports = Scroller
-},{"./BaseView":4}],8:[function(require,module,exports){
+},{"./BaseView":3}],8:[function(require,module,exports){
 exports.like = function(term, value, computedValue, row) {
     term = term.toLowerCase();
     value = value.toLowerCase();

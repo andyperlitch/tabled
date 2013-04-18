@@ -156,7 +156,5 @@ Then, simply view the index.html page of the example you want to see in a browse
 ##TODO
 
 - do not alter the collection for select boxes
-- when some columns locked, resize table using full mouse delta
-- dblclick on table resizer to fit to parent
 - sortable rows
 - radio button select

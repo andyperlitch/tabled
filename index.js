@@ -234,8 +234,11 @@ var Tabled = BaseView.extend({
     },
     
     events: {
-        'mousedown .resize-table': 'grabTableResizer'
+        'mousedown .resize-table': 'grabTableResizer',
+        'dblclick .resize-table':  'resizeTableToCtnr'
     },
+    
+    
     
     grabTableResizer: function(evt){
         evt.preventDefault();
@@ -279,6 +282,20 @@ var Tabled = BaseView.extend({
         $(window).one("mouseup", cleanup_resize);
     },
     
+    resizeTableToCtnr: function() {
+        var newWidth = this.$el.parent().width();
+        var curWidth = this.$('.tabled').width();
+        var delta = newWidth - curWidth;
+        var resizableColCount = this.columns.reduce(function(memo, column) {
+            return column.get('lock_width') ? memo : ++memo ;
+        }, 0);
+        var change = delta / resizableColCount;
+        this.columns.each(function(col){
+            var curWidth = col.get("width");
+            col.set({"width": change*1 + curWidth*1}, {validate: true});
+        });
+    },
+    
     updateComparator: function(fn) {
         this.collection.comparator = fn;
         if (typeof fn === "function") this.collection.sort();
@@ -299,9 +316,6 @@ var Tabled = BaseView.extend({
             this.columns.col_sorts = colsorts;
             this.columns.sort();
         }
-        
-        // Check for row sort order
-        // var rowsorts = 
         
         // Check for max_rows
         var max_rows = this.state('max_rows');
