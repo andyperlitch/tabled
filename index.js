@@ -244,8 +244,10 @@ var Tabled = BaseView.extend({
         
         // Horizontal
         var mouseX = evt.clientX;
+        var resizableColCount = 0;
         var col_state = this.columns.reduce(function(memo, column, index){
             memo[column.get('id')] = column.get('width');
+            if (!column.get('lock_width')) ++resizableColCount;
             return memo;
         },{},this);
         
@@ -256,7 +258,7 @@ var Tabled = BaseView.extend({
         
         var table_resize = function(evt){
             // Horizontal
-            var changeX = (evt.clientX - mouseX)/self.columns.length;
+            var changeX = (evt.clientX - mouseX)/resizableColCount;
             self.columns.each(function(column){
                 column.set({"width":col_state[column.get("id")]*1+changeX}, {validate:true});
             });

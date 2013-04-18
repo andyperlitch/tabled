@@ -261,8 +261,10 @@ var Tabled = BaseView.extend({
         
         // Horizontal
         var mouseX = evt.clientX;
+        var resizableColCount = 0;
         var col_state = this.columns.reduce(function(memo, column, index){
             memo[column.get('id')] = column.get('width');
+            if (!column.get('lock_width')) ++resizableColCount;
             return memo;
         },{},this);
         
@@ -273,7 +275,7 @@ var Tabled = BaseView.extend({
         
         var table_resize = function(evt){
             // Horizontal
-            var changeX = (evt.clientX - mouseX)/self.columns.length;
+            var changeX = (evt.clientX - mouseX)/resizableColCount;
             self.columns.each(function(column){
                 column.set({"width":col_state[column.get("id")]*1+changeX}, {validate:true});
             });
@@ -350,7 +352,7 @@ var Tabled = BaseView.extend({
 });
 
 exports = module.exports = Tabled
-},{"./lib/Column":3,"./lib/BaseView":4,"./lib/Thead":5,"./lib/Tbody":6,"./lib/Scroller":7}],4:[function(require,module,exports){
+},{"./lib/BaseView":3,"./lib/Column":4,"./lib/Thead":5,"./lib/Tbody":6,"./lib/Scroller":7}],3:[function(require,module,exports){
 var BaseView = Backbone.View.extend({
     
     // Assigns a subview to a jquery selector in this view's el
@@ -396,7 +398,7 @@ var BaseView = Backbone.View.extend({
 });
 
 exports = module.exports = BaseView
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 var Filters = require("./Filters");
 var Sorts = require("./Sorts");
 var Formats = require("./Formats");
@@ -570,7 +572,7 @@ var Columns = Backbone.Collection.extend({
 
 exports.model = Column;
 exports.collection = Columns;
-},{"./Filters":8,"./Sorts":9,"./Formats":10}],5:[function(require,module,exports){
+},{"./Filters":8,"./Formats":9,"./Sorts":10}],5:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var ThCell = BaseView.extend({
@@ -840,78 +842,7 @@ var Thead = BaseView.extend({
     
 });
 exports = module.exports = Thead;
-},{"./BaseView":4}],7:[function(require,module,exports){
-var BaseView = require('./BaseView');
-var Scroller = BaseView.extend({
-    
-    initialize: function(options) {
-        this.listenTo(this.model, "change:offset", this.updatePosition);
-        this.listenTo(options.tbody, "rendered", this.render);
-    },    
-    
-    template: '<div class="inner"></div>',
-    
-    render: function() {
-        this.$el.html(this.template);
-        this.updatePosition();
-        return this;
-    },
-    
-    updatePosition: function() {
-        var offset = this.model.get('offset');
-        var limit = this.model.get('max_rows');
-        var total = this.model.get('total_rows');
-        var actual_h = this.$el.parent().height();
-        var actual_r = actual_h / total;
-        var scroll_height = limit * actual_r;
-        if (scroll_height < 10) {
-            var correction = 10 - scroll_height;
-            actual_h -= correction;
-            actual_r = actual_h / total;
-        }
-        var scroll_top = offset * actual_r;
-        
-        if (scroll_height < actual_h && total > limit) {
-            this.$(".inner").css({
-                height: scroll_height,
-                top: scroll_top
-            });
-        } else {
-            this.$(".inner").hide();
-        }
-    },
-    
-    events: {
-        "mousedown .inner": "grabScroller"
-    },
-    
-    grabScroller: function(evt){
-        evt.preventDefault();
-        var self = this;
-        var mouseY = evt.clientY;
-        var offsetY = evt.offsetY;
-        var ratio = this.model.get('total_rows') / this.$el.parent().height();
-        var initOffset = self.model.get('offset');
-        
-        function moveScroller(evt){
-            var curMouse = evt.clientY;
-            var change = curMouse - mouseY;
-            var newOffset = Math.max(Math.round(ratio * change) + initOffset, 0);
-            newOffset = Math.min(newOffset, self.model.get('total_rows') - self.model.get('max_rows'))
-            self.model.set({'offset':newOffset}, {validate: true});
-        }
-        
-        function releaseScroller(evt){
-            $(window).off("mousemove", moveScroller);
-        }
-        
-        $(window).on("mousemove", moveScroller);
-        $(window).one("mouseup", releaseScroller);
-    }
-});
-
-exports = module.exports = Scroller
-},{"./BaseView":4}],6:[function(require,module,exports){
+},{"./BaseView":3}],6:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var Trow = BaseView.extend({
@@ -1006,7 +937,78 @@ var Tbody = BaseView.extend({
     
 });
 exports = module.exports = Tbody;
-},{"./BaseView":4}],8:[function(require,module,exports){
+},{"./BaseView":3}],7:[function(require,module,exports){
+var BaseView = require('./BaseView');
+var Scroller = BaseView.extend({
+    
+    initialize: function(options) {
+        this.listenTo(this.model, "change:offset", this.updatePosition);
+        this.listenTo(options.tbody, "rendered", this.render);
+    },    
+    
+    template: '<div class="inner"></div>',
+    
+    render: function() {
+        this.$el.html(this.template);
+        this.updatePosition();
+        return this;
+    },
+    
+    updatePosition: function() {
+        var offset = this.model.get('offset');
+        var limit = this.model.get('max_rows');
+        var total = this.model.get('total_rows');
+        var actual_h = this.$el.parent().height();
+        var actual_r = actual_h / total;
+        var scroll_height = limit * actual_r;
+        if (scroll_height < 10) {
+            var correction = 10 - scroll_height;
+            actual_h -= correction;
+            actual_r = actual_h / total;
+        }
+        var scroll_top = offset * actual_r;
+        
+        if (scroll_height < actual_h && total > limit) {
+            this.$(".inner").css({
+                height: scroll_height,
+                top: scroll_top
+            });
+        } else {
+            this.$(".inner").hide();
+        }
+    },
+    
+    events: {
+        "mousedown .inner": "grabScroller"
+    },
+    
+    grabScroller: function(evt){
+        evt.preventDefault();
+        var self = this;
+        var mouseY = evt.clientY;
+        var offsetY = evt.offsetY;
+        var ratio = this.model.get('total_rows') / this.$el.parent().height();
+        var initOffset = self.model.get('offset');
+        
+        function moveScroller(evt){
+            var curMouse = evt.clientY;
+            var change = curMouse - mouseY;
+            var newOffset = Math.max(Math.round(ratio * change) + initOffset, 0);
+            newOffset = Math.min(newOffset, self.model.get('total_rows') - self.model.get('max_rows'))
+            self.model.set({'offset':newOffset}, {validate: true});
+        }
+        
+        function releaseScroller(evt){
+            $(window).off("mousemove", moveScroller);
+        }
+        
+        $(window).on("mousemove", moveScroller);
+        $(window).one("mouseup", releaseScroller);
+    }
+});
+
+exports = module.exports = Scroller
+},{"./BaseView":3}],8:[function(require,module,exports){
 exports.like = function(term, value, computedValue, row) {
     term = term.toLowerCase();
     value = value.toLowerCase();
@@ -1031,7 +1033,7 @@ exports.number = function(term, value) {
     if ( first_char == "=" ) return against_1 == value ;
     return value.toString().indexOf(term.toString()) > -1 ;
 }
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 exports.number = function(field){
     return function(row1,row2) { 
         return row1.get(field)*1 - row2.get(field)*1;
@@ -1043,7 +1045,7 @@ exports.string = function(field){
         return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
     }
 }
-},{}],10:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 var Bormats = require('bormat');
 exports.select = function(value, model) {
     var select_key = 'selected';

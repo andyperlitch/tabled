@@ -281,8 +281,10 @@ var Tabled = BaseView.extend({
         
         // Horizontal
         var mouseX = evt.clientX;
+        var resizableColCount = 0;
         var col_state = this.columns.reduce(function(memo, column, index){
             memo[column.get('id')] = column.get('width');
+            if (!column.get('lock_width')) ++resizableColCount;
             return memo;
         },{},this);
         
@@ -293,7 +295,7 @@ var Tabled = BaseView.extend({
         
         var table_resize = function(evt){
             // Horizontal
-            var changeX = (evt.clientX - mouseX)/self.columns.length;
+            var changeX = (evt.clientX - mouseX)/resizableColCount;
             self.columns.each(function(column){
                 column.set({"width":col_state[column.get("id")]*1+changeX}, {validate:true});
             });
@@ -370,7 +372,7 @@ var Tabled = BaseView.extend({
 });
 
 exports = module.exports = Tabled
-},{"./lib/BaseView":3,"./lib/Column":4,"./lib/Thead":5,"./lib/Scroller":6,"./lib/Tbody":7}],3:[function(require,module,exports){
+},{"./lib/BaseView":3,"./lib/Column":4,"./lib/Thead":5,"./lib/Tbody":6,"./lib/Scroller":7}],3:[function(require,module,exports){
 var BaseView = Backbone.View.extend({
     
     // Assigns a subview to a jquery selector in this view's el
@@ -416,7 +418,181 @@ var BaseView = Backbone.View.extend({
 });
 
 exports = module.exports = BaseView
-},{}],5:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
+var Filters = require("./Filters");
+var Sorts = require("./Sorts");
+var Formats = require("./Formats");
+var Column = Backbone.Model.extend({
+    
+    defaults: {
+        id: "",
+        key: "",
+        label: "",
+        sort: undefined,
+        filter: undefined,
+        format: undefined,
+        select: false,
+        filter_value: "",
+        sort_value: "",
+        lock_width: false
+    },
+    
+    initialize: function() {
+        // Check for filter
+        var filter = this.get("filter");
+        if (typeof filter === "string" && Filters.hasOwnProperty(filter)) {
+            this.set("filter", Filters[filter]);
+        }
+        
+        // Check for sort
+        var sort = this.get("sort");
+        if (typeof sort === "string" && Sorts.hasOwnProperty(sort)) {
+            this.set("sort", Sorts[sort](this.get("key")));
+        }
+        
+        // Check for format
+        var select = this.get('select');
+        var format = this.get('format');
+        if (select) {
+            this.set("format", Formats.select );
+            this.set("select_key", this.get("key"));
+        } else if (typeof format === "string" && typeof Formats[format] !== "undefined") {
+            this.set("format", Formats[format]);
+        }
+    },
+    
+    serialize: function() {
+        return this.toJSON();
+    },
+    
+    validate: function(attrs) {
+        
+        if (attrs.width < attrs.min_column_width) return "A column width cannot be => 0";
+        
+        if (attrs.lock_width === true && attrs.width > 0) return "This column has a locked width";
+        
+    },
+    
+    getKey: function(model) {
+        return model.get(this.get('key'));
+    },
+    
+    getFormatted: function(model) {
+        var fn = this.get('format');
+        return (typeof fn === "function")
+            ? fn(this.getKey(model), model)
+            : this.getKey(model);
+    },
+    
+    sortIndex: function(newIndex) {
+        var sorts = this.collection.col_sorts;
+        if (typeof newIndex === "undefined") return sorts.indexOf(this.get("id"));
+        
+        var curIdx = this.sortIndex();
+        var id = sorts.splice(curIdx, 1)[0];
+        sorts.splice(newIndex, 0, id);
+        this.collection.sort();
+    }
+    
+});
+
+var Columns = Backbone.Collection.extend({
+    
+    model: Column,
+    
+    initialize: function(models, options) {
+        this.config = options.config;
+        _.each(models, this.setMinWidth, this);
+        this.row_sorts = this.getInitialRowSorts(models);
+        this.col_sorts = this.getInitialColSorts(models);
+        this.on("change:sort_value", this.onSortChange);
+    },
+    
+    comparator: function(col1, col2) {
+        var idx1 = this.col_sorts.indexOf(col1.get("id"));
+        var idx2 = this.col_sorts.indexOf(col2.get("id"));
+        return idx1 - idx2;
+    },
+    
+    setMinWidth: function(model) {
+        if (model.hasOwnProperty('min_column_width')) return;
+        
+        model['min_column_width'] = this.config.get("min_column_width");
+    },
+    
+    getInitialRowSorts: function(models) {
+        var self = this;
+        var defaultSorts = _.pluck(models, "id");
+        var sorts;
+        if (this.config.get("row_sorts")) {
+            sorts = this.config.get("row_sorts");
+            if ( ! (_.every(sorts, function(sort) { return defaultSorts.indexOf(sort) > -1 })) ) {
+                throw new Error("One or more values in the 'row_sorts' option does not match a column id");
+            }
+        } else {
+            sorts = _.reduce(models,function(memo, column){ 
+                if (column['sort_value']) 
+                    memo.push(column["id"]); 
+                
+                return memo;
+            },[]);
+        }
+        return sorts;
+    },
+    
+    getInitialColSorts: function(models) {
+        var self = this;
+        var defaultSorts = _.pluck(models, "id");
+        var sorts;
+        if (this.config.get("col_sorts")) {
+            sorts = this.config.get("col_sorts");
+            if ( ! (_.every(sorts, function(sort) { return defaultSorts.indexOf(sort) > -1 })) ) {
+                throw new Error("One or more values in the 'col_sorts' option does not match a column id");
+            }
+        } else {
+            sorts = defaultSorts;
+        }
+        return sorts;
+    },
+    
+    onSortChange: function(model, value) {
+        var id = model.get("id");
+        var index = this.row_sorts.indexOf(id);
+        if (index != -1) {
+            if (value === "") {
+                this.row_sorts.splice(index, 1);
+            }
+        } else {
+            this.row_sorts.push(id);
+        }
+        this.updateComparator();
+    },
+    
+    updateComparator: function() {
+        var comparator = false;
+        if (this.row_sorts.length !== 0){
+            var self = this;
+            var comparator = function(row1, row2) {
+                for (var i=0; i < self.row_sorts.length; i++) {
+                    var id = self.row_sorts[i];
+                    var column = self.get(id);
+                    var fn = column.get("sort");
+                    var value = column.get("sort_value");
+                    var sort_result = value == "a" ? fn(row1, row2) : fn(row2, row1) ;
+                    if (sort_result != 0) return sort_result;
+                };
+                return 0;
+            }
+        }
+        this.trigger("change:comparator", comparator);
+        
+    }
+    
+});
+
+exports.model = Column;
+exports.collection = Columns;
+},{"./Filters":8,"./Sorts":9,"./Formats":10}],5:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var ThCell = BaseView.extend({
@@ -686,252 +862,7 @@ var Thead = BaseView.extend({
     
 });
 exports = module.exports = Thead;
-},{"./BaseView":3}],4:[function(require,module,exports){
-var Filters = require("./Filters");
-var Sorts = require("./Sorts");
-var Formats = require("./Formats");
-var Column = Backbone.Model.extend({
-    
-    defaults: {
-        id: "",
-        key: "",
-        label: "",
-        sort: undefined,
-        filter: undefined,
-        format: undefined,
-        select: false,
-        filter_value: "",
-        sort_value: "",
-        lock_width: false
-    },
-    
-    initialize: function() {
-        // Check for filter
-        var filter = this.get("filter");
-        if (typeof filter === "string" && Filters.hasOwnProperty(filter)) {
-            this.set("filter", Filters[filter]);
-        }
-        
-        // Check for sort
-        var sort = this.get("sort");
-        if (typeof sort === "string" && Sorts.hasOwnProperty(sort)) {
-            this.set("sort", Sorts[sort](this.get("key")));
-        }
-        
-        // Check for format
-        var select = this.get('select');
-        var format = this.get('format');
-        if (select) {
-            this.set("format", Formats.select );
-            this.set("select_key", this.get("key"));
-        } else if (typeof format === "string" && typeof Formats[format] !== "undefined") {
-            this.set("format", Formats[format]);
-        }
-    },
-    
-    serialize: function() {
-        return this.toJSON();
-    },
-    
-    validate: function(attrs) {
-        
-        if (attrs.width < attrs.min_column_width) return "A column width cannot be => 0";
-        
-        if (attrs.lock_width === true && attrs.width > 0) return "This column has a locked width";
-        
-    },
-    
-    getKey: function(model) {
-        return model.get(this.get('key'));
-    },
-    
-    getFormatted: function(model) {
-        var fn = this.get('format');
-        return (typeof fn === "function")
-            ? fn(this.getKey(model), model)
-            : this.getKey(model);
-    },
-    
-    sortIndex: function(newIndex) {
-        var sorts = this.collection.col_sorts;
-        if (typeof newIndex === "undefined") return sorts.indexOf(this.get("id"));
-        
-        var curIdx = this.sortIndex();
-        var id = sorts.splice(curIdx, 1)[0];
-        sorts.splice(newIndex, 0, id);
-        this.collection.sort();
-    }
-    
-});
-
-var Columns = Backbone.Collection.extend({
-    
-    model: Column,
-    
-    initialize: function(models, options) {
-        this.config = options.config;
-        _.each(models, this.setMinWidth, this);
-        this.row_sorts = this.getInitialRowSorts(models);
-        this.col_sorts = this.getInitialColSorts(models);
-        this.on("change:sort_value", this.onSortChange);
-    },
-    
-    comparator: function(col1, col2) {
-        var idx1 = this.col_sorts.indexOf(col1.get("id"));
-        var idx2 = this.col_sorts.indexOf(col2.get("id"));
-        return idx1 - idx2;
-    },
-    
-    setMinWidth: function(model) {
-        if (model.hasOwnProperty('min_column_width')) return;
-        
-        model['min_column_width'] = this.config.get("min_column_width");
-    },
-    
-    getInitialRowSorts: function(models) {
-        var self = this;
-        var defaultSorts = _.pluck(models, "id");
-        var sorts;
-        if (this.config.get("row_sorts")) {
-            sorts = this.config.get("row_sorts");
-            if ( ! (_.every(sorts, function(sort) { return defaultSorts.indexOf(sort) > -1 })) ) {
-                throw new Error("One or more values in the 'row_sorts' option does not match a column id");
-            }
-        } else {
-            sorts = _.reduce(models,function(memo, column){ 
-                if (column['sort_value']) 
-                    memo.push(column["id"]); 
-                
-                return memo;
-            },[]);
-        }
-        return sorts;
-    },
-    
-    getInitialColSorts: function(models) {
-        var self = this;
-        var defaultSorts = _.pluck(models, "id");
-        var sorts;
-        if (this.config.get("col_sorts")) {
-            sorts = this.config.get("col_sorts");
-            if ( ! (_.every(sorts, function(sort) { return defaultSorts.indexOf(sort) > -1 })) ) {
-                throw new Error("One or more values in the 'col_sorts' option does not match a column id");
-            }
-        } else {
-            sorts = defaultSorts;
-        }
-        return sorts;
-    },
-    
-    onSortChange: function(model, value) {
-        var id = model.get("id");
-        var index = this.row_sorts.indexOf(id);
-        if (index != -1) {
-            if (value === "") {
-                this.row_sorts.splice(index, 1);
-            }
-        } else {
-            this.row_sorts.push(id);
-        }
-        this.updateComparator();
-    },
-    
-    updateComparator: function() {
-        var comparator = false;
-        if (this.row_sorts.length !== 0){
-            var self = this;
-            var comparator = function(row1, row2) {
-                for (var i=0; i < self.row_sorts.length; i++) {
-                    var id = self.row_sorts[i];
-                    var column = self.get(id);
-                    var fn = column.get("sort");
-                    var value = column.get("sort_value");
-                    var sort_result = value == "a" ? fn(row1, row2) : fn(row2, row1) ;
-                    if (sort_result != 0) return sort_result;
-                };
-                return 0;
-            }
-        }
-        this.trigger("change:comparator", comparator);
-        
-    }
-    
-});
-
-exports.model = Column;
-exports.collection = Columns;
-},{"./Filters":8,"./Sorts":9,"./Formats":10}],6:[function(require,module,exports){
-var BaseView = require('./BaseView');
-var Scroller = BaseView.extend({
-    
-    initialize: function(options) {
-        this.listenTo(this.model, "change:offset", this.updatePosition);
-        this.listenTo(options.tbody, "rendered", this.render);
-    },    
-    
-    template: '<div class="inner"></div>',
-    
-    render: function() {
-        this.$el.html(this.template);
-        this.updatePosition();
-        return this;
-    },
-    
-    updatePosition: function() {
-        var offset = this.model.get('offset');
-        var limit = this.model.get('max_rows');
-        var total = this.model.get('total_rows');
-        var actual_h = this.$el.parent().height();
-        var actual_r = actual_h / total;
-        var scroll_height = limit * actual_r;
-        if (scroll_height < 10) {
-            var correction = 10 - scroll_height;
-            actual_h -= correction;
-            actual_r = actual_h / total;
-        }
-        var scroll_top = offset * actual_r;
-        
-        if (scroll_height < actual_h && total > limit) {
-            this.$(".inner").css({
-                height: scroll_height,
-                top: scroll_top
-            });
-        } else {
-            this.$(".inner").hide();
-        }
-    },
-    
-    events: {
-        "mousedown .inner": "grabScroller"
-    },
-    
-    grabScroller: function(evt){
-        evt.preventDefault();
-        var self = this;
-        var mouseY = evt.clientY;
-        var offsetY = evt.offsetY;
-        var ratio = this.model.get('total_rows') / this.$el.parent().height();
-        var initOffset = self.model.get('offset');
-        
-        function moveScroller(evt){
-            var curMouse = evt.clientY;
-            var change = curMouse - mouseY;
-            var newOffset = Math.max(Math.round(ratio * change) + initOffset, 0);
-            newOffset = Math.min(newOffset, self.model.get('total_rows') - self.model.get('max_rows'))
-            self.model.set({'offset':newOffset}, {validate: true});
-        }
-        
-        function releaseScroller(evt){
-            $(window).off("mousemove", moveScroller);
-        }
-        
-        $(window).on("mousemove", moveScroller);
-        $(window).one("mouseup", releaseScroller);
-    }
-});
-
-exports = module.exports = Scroller
-},{"./BaseView":3}],7:[function(require,module,exports){
+},{"./BaseView":3}],6:[function(require,module,exports){
 var BaseView = require('./BaseView');
 
 var Trow = BaseView.extend({
@@ -1026,19 +957,78 @@ var Tbody = BaseView.extend({
     
 });
 exports = module.exports = Tbody;
-},{"./BaseView":3}],9:[function(require,module,exports){
-exports.number = function(field){
-    return function(row1,row2) { 
-        return row1.get(field)*1 - row2.get(field)*1;
+},{"./BaseView":3}],7:[function(require,module,exports){
+var BaseView = require('./BaseView');
+var Scroller = BaseView.extend({
+    
+    initialize: function(options) {
+        this.listenTo(this.model, "change:offset", this.updatePosition);
+        this.listenTo(options.tbody, "rendered", this.render);
+    },    
+    
+    template: '<div class="inner"></div>',
+    
+    render: function() {
+        this.$el.html(this.template);
+        this.updatePosition();
+        return this;
+    },
+    
+    updatePosition: function() {
+        var offset = this.model.get('offset');
+        var limit = this.model.get('max_rows');
+        var total = this.model.get('total_rows');
+        var actual_h = this.$el.parent().height();
+        var actual_r = actual_h / total;
+        var scroll_height = limit * actual_r;
+        if (scroll_height < 10) {
+            var correction = 10 - scroll_height;
+            actual_h -= correction;
+            actual_r = actual_h / total;
+        }
+        var scroll_top = offset * actual_r;
+        
+        if (scroll_height < actual_h && total > limit) {
+            this.$(".inner").css({
+                height: scroll_height,
+                top: scroll_top
+            });
+        } else {
+            this.$(".inner").hide();
+        }
+    },
+    
+    events: {
+        "mousedown .inner": "grabScroller"
+    },
+    
+    grabScroller: function(evt){
+        evt.preventDefault();
+        var self = this;
+        var mouseY = evt.clientY;
+        var offsetY = evt.offsetY;
+        var ratio = this.model.get('total_rows') / this.$el.parent().height();
+        var initOffset = self.model.get('offset');
+        
+        function moveScroller(evt){
+            var curMouse = evt.clientY;
+            var change = curMouse - mouseY;
+            var newOffset = Math.max(Math.round(ratio * change) + initOffset, 0);
+            newOffset = Math.min(newOffset, self.model.get('total_rows') - self.model.get('max_rows'))
+            self.model.set({'offset':newOffset}, {validate: true});
+        }
+        
+        function releaseScroller(evt){
+            $(window).off("mousemove", moveScroller);
+        }
+        
+        $(window).on("mousemove", moveScroller);
+        $(window).one("mouseup", releaseScroller);
     }
-}
-exports.string = function(field){
-    return function(row1,row2) { 
-        if ( row1.get(field).toString().toLowerCase() == row2.get(field).toString().toLowerCase() ) return 0;
-        return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
-    }
-}
-},{}],8:[function(require,module,exports){
+});
+
+exports = module.exports = Scroller
+},{"./BaseView":3}],8:[function(require,module,exports){
 exports.like = function(term, value, computedValue, row) {
     term = term.toLowerCase();
     value = value.toLowerCase();
@@ -1062,6 +1052,18 @@ exports.number = function(term, value) {
     if ( first_char == "~" ) return Math.round(value) == against_1 ;
     if ( first_char == "=" ) return against_1 == value ;
     return value.toString().indexOf(term.toString()) > -1 ;
+}
+},{}],9:[function(require,module,exports){
+exports.number = function(field){
+    return function(row1,row2) { 
+        return row1.get(field)*1 - row2.get(field)*1;
+    }
+}
+exports.string = function(field){
+    return function(row1,row2) { 
+        if ( row1.get(field).toString().toLowerCase() == row2.get(field).toString().toLowerCase() ) return 0;
+        return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
+    }
 }
 },{}],10:[function(require,module,exports){
 var Bormats = require('bormat');
