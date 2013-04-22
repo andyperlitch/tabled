@@ -1,4 +1,4 @@
-var BaseView = require('./lib/BaseView');
+var BaseView = require('bassview');
 var Column = require('./lib/Column').model;
 var Columns = require('./lib/Column').collection;
 var Thead = require('./lib/Thead');

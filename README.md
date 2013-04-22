@@ -1,6 +1,8 @@
 Tabled
 ======
 
+[![browser support](https://ci.testling.com/USER/PROJECT.png)](https://ci.testling.com/USER/PROJECT)
+
 Backbone UI component for building interactive tables.
 
 ##Usage
