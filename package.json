@@ -26,7 +26,7 @@
     "dependencies": {
         "browserify": ">=2.12.0",
         "bormat": "0.0.1",
-        "bassview": "0.0.0"
+        "bassview": "0.0.1"
     },
     "jam": {
         "packageDir": "./vendor",
