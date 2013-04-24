@@ -305,14 +305,23 @@ var Tabled = BaseView.extend({
         // Check widths
         var widths = this.state('column_widths');
         if (widths !== undefined) {
-            _.each(widths, function(val, key){
-                this.columns.get(key).set('width', val);
+            _.each(widths, function(val, key, list){
+                var col = this.columns.get(key);
+                if (col) col.set('width', val);
+                else {
+                    list.splice(key, 1);
+                    this.state('column_widths', list);
+                }
             }, this);
         }
         
         // Check for column sort order
         var colsorts = this.state('column_sorts');
-        if (colsorts !== undefined && colsorts.length === this.columns.length) {
+        if (
+            colsorts !== undefined && 
+            colsorts.length === this.columns.length &&
+            this.columns.every(function(col){ return colsorts.indexOf(col.get('id')) > -1 })
+        ) {
             this.columns.col_sorts = colsorts;
             this.columns.sort();
         }

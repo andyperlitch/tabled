@@ -24,7 +24,9 @@ describe("the Tabled module", function() {
         });
         
         it("should be a backbone view", function() {
-            assert(this.tabled instanceof Backbone.View, "was not a backbone view");
+            assert(this.tabled.$el instanceof $, "did not have an $el");
+            assert(this.tabled.el instanceof Element, "did not have an el");
+            assert.equal( typeof this.tabled.setElement, "function", "setElement was not a function");
         });
         
         it("should require that the data is a backbone collection", function(){
