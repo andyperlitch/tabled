@@ -1,6 +1,6 @@
 {
     "name": "tabled",
-    "version": "0.1.5",
+    "version": "0.1.6",
     "description": "Backbone UI component for building interactive tables.",
     "main": "index.js",
     "scripts": {
@@ -25,15 +25,11 @@
     },
     "dependencies": {
         "browserify": ">=2.12.0",
-        "bormat": "0.0.1",
-        "bassview": "0.0.1"
-    },
-    "jam": {
-        "packageDir": "./vendor",
-        "dependencies": {
-            "backbone":"",
-            "jquery":""
-        }
+        "bormat": ">=0.0.7",
+        "bassview": ">=0.0.4",
+        "underscore": ">=1.4.3",
+        "backbone": ">=1.0.0",
+        "ktbr": ">=0.0.3"
     },
     "testling": {
         "files": "test/suite.js",
@@ -43,5 +39,8 @@
             "firefox": [ 13 ]
         },
         "harness": "mocha"
+    },
+    "browserify": {
+        "transform": ["ktbr"]
     }
 }

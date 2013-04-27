@@ -1,3 +1,4 @@
+var _ = require('underscore'), Backbone = require('backbone');
 var BaseView = require('bassview');
 var Column = require('./lib/Column').model;
 var Columns = require('./lib/Column').collection;
