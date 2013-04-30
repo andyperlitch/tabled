@@ -1,5 +1,5 @@
 var Tabled = require('../../');
-
+var _ = require('underscore'), Backbone = require('backbone');
 function inches2feet(inches, model){
     var feet = Math.floor(inches/12);
     var inches = inches % 12;

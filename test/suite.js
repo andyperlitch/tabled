@@ -1,4 +1,5 @@
 var assert = require('assert');
+var _ = require('underscore'), Backbone = require('backbone');
 describe("the Tabled module", function() {
     
     describe("a simple tabled view", function() {

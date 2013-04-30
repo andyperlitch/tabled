@@ -1,4 +1,4 @@
-;(function(e,t,n){function i(n,s){if(!t[n]){if(!e[n]){var o=typeof require=="function"&&require;if(!s&&o)return o(n,!0);if(r)return r(n,!0);throw new Error("Cannot find module '"+n+"'")}var u=t[n]={exports:{}};e[n][0](function(t){var r=e[n][1][t];return i(r?r:t)},u,u.exports)}return t[n].exports}var r=typeof require=="function"&&require;for(var s=0;s<n.length;s++)i(n[s]);return i})({1:[function(require,module,exports){
+;(function(e,t,n){function i(n,s){if(!t[n]){if(!e[n]){var o=typeof require=="function"&&require;if(!s&&o)return o(n,!0);if(r)return r(n,!0);throw new Error("Cannot find module '"+n+"'")}var u=t[n]={exports:{}};e[n][0].call(u.exports,function(t){var r=e[n][1][t];return i(r?r:t)},u,u.exports)}return t[n].exports}var r=typeof require=="function"&&require;for(var s=0;s<n.length;s++)i(n[s]);return i})({1:[function(require,module,exports){
 var Tabled = require('../../');
 
 function inches2feet(inches, model){
@@ -33,6 +33,7 @@ var tabled = new Tabled({
 var $pg = $("#playground");
 tabled.render().$el.appendTo($pg);
 },{"../../":2}],2:[function(require,module,exports){
+var _ = require('underscore'), Backbone = require('backbone');
 var BaseView = require('bassview');
 var Column = require('./lib/Column').model;
 var Columns = require('./lib/Column').collection;
@@ -117,7 +118,7 @@ var Tabled = BaseView.extend({
     initialize: function(options) {
 
         // Ensure that this.collection (the data) is a backbone collection
-        if ( !(this.collection instanceof Backbone.Collection) ) throw "Tabled must be provided with a backbone collection as its data";
+        if ( !(this.collection instanceof Backbone.Collection) ) throw new Error("Tabled must be provided with a backbone collection as its data");
         
         // Config object
         this.config = new ConfigModel(this.options);
@@ -340,14 +341,23 @@ var Tabled = BaseView.extend({
         // Check widths
         var widths = this.state('column_widths');
         if (widths !== undefined) {
-            _.each(widths, function(val, key){
-                this.columns.get(key).set('width', val);
+            _.each(widths, function(val, key, list){
+                var col = this.columns.get(key);
+                if (col) col.set('width', val);
+                else {
+                    list.splice(key, 1);
+                    this.state('column_widths', list);
+                }
             }, this);
         }
         
         // Check for column sort order
         var colsorts = this.state('column_sorts');
-        if (colsorts !== undefined && colsorts.length === this.columns.length) {
+        if (
+            colsorts !== undefined && 
+            colsorts.length === this.columns.length &&
+            this.columns.every(function(col){ return colsorts.indexOf(col.get('id')) > -1 })
+        ) {
             this.columns.col_sorts = colsorts;
             this.columns.sort();
         }
@@ -384,712 +394,7 @@ var Tabled = BaseView.extend({
 });
 
 exports = module.exports = Tabled
-},{"./lib/Column":3,"./lib/Thead":4,"./lib/Tbody":5,"./lib/Scroller":6,"bassview":7}],3:[function(require,module,exports){
-var Filters = require("./Filters");
-var Sorts = require("./Sorts");
-var Formats = require("./Formats");
-var Column = Backbone.Model.extend({
-    
-    defaults: {
-        id: "",
-        key: "",
-        label: "",
-        sort: undefined,
-        filter: undefined,
-        format: undefined,
-        select: false,
-        filter_value: "",
-        sort_value: "",
-        lock_width: false
-    },
-    
-    initialize: function() {
-        // Check for filter
-        var filter = this.get("filter");
-        if (typeof filter === "string" && Filters.hasOwnProperty(filter)) {
-            this.set("filter", Filters[filter]);
-        }
-        
-        // Check for sort
-        var sort = this.get("sort");
-        if (typeof sort === "string" && Sorts.hasOwnProperty(sort)) {
-            this.set("sort", Sorts[sort](this.get("key")));
-        }
-        
-        // Check for format
-        var select = this.get('select');
-        var format = this.get('format');
-        if (select) {
-            this.set("format", Formats.select );
-            this.set("select_key", this.get("key"));
-        } else if (typeof format === "string" && typeof Formats[format] !== "undefined") {
-            this.set("format", Formats[format]);
-        }
-    },
-    
-    serialize: function() {
-        return this.toJSON();
-    },
-    
-    validate: function(attrs) {
-        
-        if (attrs.width < attrs.min_column_width) return "A column width cannot be => 0";
-        
-        if (attrs.lock_width === true && attrs.width > 0) return "This column has a locked width";
-        
-    },
-    
-    getKey: function(model) {
-        return model.get(this.get('key'));
-    },
-    
-    getFormatted: function(model) {
-        var fn = this.get('format');
-        return (typeof fn === "function")
-            ? fn(this.getKey(model), model)
-            : this.getKey(model);
-    },
-    
-    sortIndex: function(newIndex) {
-        var sorts = this.collection.col_sorts;
-        if (typeof newIndex === "undefined") return sorts.indexOf(this.get("id"));
-        
-        var curIdx = this.sortIndex();
-        var id = sorts.splice(curIdx, 1)[0];
-        sorts.splice(newIndex, 0, id);
-        this.collection.sort();
-    }
-    
-});
-
-var Columns = Backbone.Collection.extend({
-    
-    model: Column,
-    
-    initialize: function(models, options) {
-        this.config = options.config;
-        _.each(models, this.setMinWidth, this);
-        this.row_sorts = this.getInitialRowSorts(models);
-        this.col_sorts = this.getInitialColSorts(models);
-        this.on("change:sort_value", this.onSortChange);
-    },
-    
-    comparator: function(col1, col2) {
-        var idx1 = this.col_sorts.indexOf(col1.get("id"));
-        var idx2 = this.col_sorts.indexOf(col2.get("id"));
-        return idx1 - idx2;
-    },
-    
-    setMinWidth: function(model) {
-        if (model.hasOwnProperty('min_column_width')) return;
-        
-        model['min_column_width'] = this.config.get("min_column_width");
-    },
-    
-    getInitialRowSorts: function(models) {
-        var self = this;
-        var defaultSorts = _.pluck(models, "id");
-        var sorts;
-        if (this.config.get("row_sorts")) {
-            sorts = this.config.get("row_sorts");
-            if ( ! (_.every(sorts, function(sort) { return defaultSorts.indexOf(sort) > -1 })) ) {
-                throw new Error("One or more values in the 'row_sorts' option does not match a column id");
-            }
-        } else {
-            sorts = _.reduce(models,function(memo, column){ 
-                if (column['sort_value']) 
-                    memo.push(column["id"]); 
-                
-                return memo;
-            },[]);
-        }
-        return sorts;
-    },
-    
-    getInitialColSorts: function(models) {
-        var self = this;
-        var defaultSorts = _.pluck(models, "id");
-        var sorts;
-        if (this.config.get("col_sorts")) {
-            sorts = this.config.get("col_sorts");
-            if ( ! (_.every(sorts, function(sort) { return defaultSorts.indexOf(sort) > -1 })) ) {
-                throw new Error("One or more values in the 'col_sorts' option does not match a column id");
-            }
-        } else {
-            sorts = defaultSorts;
-        }
-        return sorts;
-    },
-    
-    onSortChange: function(model, value) {
-        var id = model.get("id");
-        var index = this.row_sorts.indexOf(id);
-        if (index != -1) {
-            if (value === "") {
-                this.row_sorts.splice(index, 1);
-            }
-        } else {
-            this.row_sorts.push(id);
-        }
-        this.updateComparator();
-    },
-    
-    updateComparator: function() {
-        var comparator = false;
-        if (this.row_sorts.length !== 0){
-            var self = this;
-            var comparator = function(row1, row2) {
-                for (var i=0; i < self.row_sorts.length; i++) {
-                    var id = self.row_sorts[i];
-                    var column = self.get(id);
-                    var fn = column.get("sort");
-                    var value = column.get("sort_value");
-                    var sort_result = value == "a" ? fn(row1, row2) : fn(row2, row1) ;
-                    if (sort_result != 0) return sort_result;
-                };
-                return 0;
-            }
-        }
-        this.trigger("change:comparator", comparator);
-        
-    }
-    
-});
-
-exports.model = Column;
-exports.collection = Columns;
-},{"./Filters":8,"./Sorts":9,"./Formats":10}],8:[function(require,module,exports){
-exports.like = function(term, value, computedValue, row) {
-    term = term.toLowerCase();
-    value = value.toLowerCase();
-    return value.indexOf(term) > -1;
-}
-exports.is = function(term, value, computedValue, row) {
-    term = term.toLowerCase();
-    value = value.toLowerCase();
-    return term == value;
-}
-exports.number = function(term, value) {
-    value *= 1;
-    var first_two = term.substr(0,2);
-    var first_char = term[0];
-    var against_1 = term.substr(1)*1;
-    var against_2 = term.substr(2)*1;
-    if ( first_two == "<=" ) return value <= against_2 ;
-    if ( first_two == ">=" ) return value >= against_2 ;
-    if ( first_char == "<" ) return value < against_1 ;
-    if ( first_char == ">" ) return value > against_1 ;
-    if ( first_char == "~" ) return Math.round(value) == against_1 ;
-    if ( first_char == "=" ) return against_1 == value ;
-    return value.toString().indexOf(term.toString()) > -1 ;
-}
-},{}],9:[function(require,module,exports){
-exports.number = function(field){
-    return function(row1,row2) { 
-        return row1.get(field)*1 - row2.get(field)*1;
-    }
-}
-exports.string = function(field){
-    return function(row1,row2) { 
-        if ( row1.get(field).toString().toLowerCase() == row2.get(field).toString().toLowerCase() ) return 0;
-        return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
-    }
-}
-},{}],7:[function(require,module,exports){
-(function(){// check for global
-if (!_) var _ = require('underscore');
-if (!Backbone) var Backbone = require('backbone');
-var BassView = Backbone.View.extend({
-    
-    // Assigns a view to a jquery selector in this view's element.
-    // the second parameter may be an actual backbone view, or a 
-    // key for a registered subview via the subview() method below.
-    assign : function (selector, view) {
-        var selectors;
-        if (_.isObject(selector)) {
-            selectors = selector;
-        }
-        else {
-            selectors = {};
-            selectors[selector] = view;
-        }
-        if (!selectors) return;
-        _.each(selectors, function (view, selector) {
-            if (typeof view === "string") view = this.__subviews__[view];
-            view.setElement(this.$(selector)).render();
-        }, this);
-    },
-    
-    // Triggers a custom event that can be listened for 
-    // by subviews etc. Also unbinds events to prevent
-    // detached DOM elements.
-    remove: function () {
-        this.trigger("clean_up");
-        this.unbind();
-        Backbone.View.prototype.remove.call(this);
-    },
-    
-    // Registers or retrieves a subview of this view.
-    // The main thing here is to automate the process of
-    // having subviews listen to their parents for clean_up.
-    subview: function(key, view){
-        // Set up subview object
-        var sv = this.__subviews__ = this.__subviews__ || {};
-        
-        // Check if getting
-        if (view === undefined) return sv[key];
-        
-        // Add listener for removal event
-        view.listenTo(this, "clean_up", view.remove);
-        
-        // Set the key
-        sv[key] = view;
-        
-        // Allow chaining
-        return view
-    }
-    
-});
-
-exports = module.exports = BassView
-})()
-},{"underscore":11,"backbone":12}],4:[function(require,module,exports){
-var BaseView = require('bassview');
-
-var ThCell = BaseView.extend({
-    
-    className: 'th',
-    
-    template: _.template('<div class="cell-inner" title="<%= label %>"><span class="th-header"><%= label %></span></div><% if(lock_width !== true) {%><span class="resize"></span><%}%>'),
-    
-    initialize: function() {
-        this.listenTo(this.model, "change:sort_value", this.render );
-        this.listenTo(this.model, "change:width", function(model, width) {
-            this.$el.width(width);
-        });
-    },
-    
-    render: function() {
-        var json = this.model.serialize();
-        var sort_class = json.sort_value ? (json.sort_value == "d" ? "desc" : "asc" ) : "" ;
-        this.$el
-            .removeClass('asc desc')
-            .addClass('col-'+json.id+" "+sort_class)
-            .width(json.width)
-            .html(this.template(json));
-        if (sort_class !== "") {
-            this.$(".th-header").prepend('<i class="'+sort_class+'-icon"></i> ');
-        }
-        return this;
-    },
-    
-    events: {
-        "mousedown .resize": "grabResizer",
-        "dblclick .resize": "fitToContent",
-        "mouseup .th-header": "changeColumnSort",
-        "mousedown": "grabColumn"
-    },
-    
-    grabResizer: function(evt) {
-        evt.preventDefault();
-        evt.stopPropagation();
-        var self = this;
-        var mouseX = evt.clientX;
-        var columnWidth = this.model.get("width");
-        // Handler for when mouse is moving
-        var col_resize = function(evt) {
-            var column = self.model;
-            var change = evt.clientX - mouseX;
-            var newWidth = columnWidth + change;
-            if ( newWidth < column.get("min_column_width")) return;
-            column.set({"width": newWidth}, {validate: true});
-        }
-        var cleanup_resize = function(evt) {
-            $(window).off("mousemove", col_resize);
-        }
-        
-        $(window).on("mousemove", col_resize);
-        $(window).one("mouseup", cleanup_resize);
-    },
-    
-    fitToContent: function(evt) {
-        evt.preventDefault();
-        evt.stopPropagation();
-        var new_width = 0;
-        var min_width = this.model.get('min_column_width');
-        var id = this.model.get('id');
-        var $ctx = this.$el.parents('.tabled').find('.tbody');
-        $(".td.col-"+id+" .cell-inner", $ctx).each(function(i, el){
-            new_width = Math.max(new_width,$(this).outerWidth(true), min_width);
-        });
-        this.model.set({'width':new_width},{validate: true});
-    },
-    
-    changeColumnSort: function(evt) {
-        
-        var model = this.model;
-        
-        if (typeof model.get("sort") !== "function" || model.get("moving") === true) return;
-        
-        var cur_sort = model.get("sort_value");
-        
-        if (!evt.shiftKey) {
-            // disable all sorts
-            model.collection.each(function(col){
-                if (col !== model) col.set({"sort_value": ""})
-            });
-        }
-        
-        switch(cur_sort) {
-            case "":
-                model.set("sort_value", "a");
-                break;
-            case "a":
-                model.set("sort_value", "d");
-                break;
-            case "d":
-                model.set("sort_value", "");
-                break;
-        }
-    },
-    
-    grabColumn: function(evt) {
-        evt.preventDefault();
-        evt.originalEvent.preventDefault();
-
-        var self = this;
-        var mouseX = evt.clientX;
-        var offsetX = evt.offsetX;
-        var thresholds = [];
-        var currentIdx = this.model.sortIndex();
-        var $tr = this.$el.parent();
-        $tr.find('.th').each(function(i,el){
-            var $this = $(this);
-            var offset = $this.offset().left;
-            var half = $this.width() / 2;
-            if (i != currentIdx) thresholds.push(offset+half);
-        });
-        var prevent_mouseup = false;
-        
-        var getNewIndex = function(pos) {
-            var newIdx = 0;
-            for (var i=0; i < thresholds.length; i++) {
-                var val = thresholds[i];
-                if (pos > val) newIdx++;
-                else return newIdx;
-            };
-            return newIdx;
-        }
-        
-        var drawHelper = function(newIdx) {
-            $tr.find('.colsort-helper').remove();
-            if (newIdx == currentIdx) return;
-            var method = newIdx < currentIdx ? 'before' : 'after';
-            $tr.find('.th:eq('+newIdx+')')[method]('<div class="colsort-helper"></div>');
-        }
-        
-        var move_column = function(evt) {
-            var curMouse = evt.clientX;
-            var change = curMouse - mouseX;
-            self.$el.css({'left':change, 'opacity':0.5, 'zIndex': 10});
-            
-            var newIdx = getNewIndex(curMouse, thresholds);
-            drawHelper(newIdx);
-            self.model.set('moving', true);
-        }
-        
-        var cleanup_move = function(evt) {
-            self.$el.css({'left': 0, 'opacity':1});
-            $tr.find('.colsort-helper').remove();
-            var curMouse = evt.clientX;
-            var change = curMouse - mouseX;
-            self.model.sortIndex(getNewIndex(curMouse, thresholds));
-            $(window).off("mousemove", move_column);
-            self.model.set('moving', false);
-        }
-        
-        $(window).on("mousemove", move_column);
-        $(window).one("mouseup", cleanup_move)
-    }
-});
-
-var ThRow = BaseView.extend({
-    
-    render: function() {
-        // clear it
-        this.$el.empty();
-        
-        // render each th cell
-        this.collection.each(function(column){
-            var view = new ThCell({ model: column });
-            this.$el.append( view.render().el )
-            view.listenTo(this, "clean_up", view.remove);
-        }, this);
-        return this;
-    }
-    
-});
-
-var FilterCell = BaseView.extend({
-    
-    initialize: function() {
-        this.listenTo(this.model, "change:width", function(column, width){
-            this.$el.width(width);
-        })
-    },
-    
-    template: '<div class="cell-inner"><input class="filter" type="search" placeholder="filter" /></div>',
-    
-    render: function() {
-        var fn = this.model.get('filter');
-        var markup = typeof fn === "function" ? this.template : "" ;
-        this.$el.addClass('td col-'+this.model.get('id')).width(this.model.get('width'));
-        this.$el.html(markup);
-        this.$("input").val(this.model.get('filter_value'));
-        return this;
-    },
-    
-    events: {
-        "click .filter": "updateFilter",
-        "keyup .filter": "updateFilterDelayed"
-    },
-    
-    updateFilter: function(evt) {
-        this.model.set('filter_value', $.trim(this.$('.filter').val()) );
-    },
-    
-    updateFilterDelayed: function(evt) {
-        if (this.updateFilterTimeout) clearTimeout(this.updateFilterTimeout)
-        this.updateFilterTimeout = setTimeout(this.updateFilter.bind(this, evt), 200);
-    }
-    
-});
-
-var FilterRow = BaseView.extend({
-    
-    render: function() {
-        // clear it
-        this.$el.empty();
-        this.trigger("clean_up")
-        
-        // render each th cell
-        this.collection.each(function(column){
-            var view = new FilterCell({ model: column });
-            this.$el.append( view.render().el );
-            view.listenTo(this, "clean_up", view.remove);
-        }, this);
-        return this;
-    }
-    
-});
-
-var Thead = BaseView.extend({
-    
-    initialize: function(options) {
-        // Set config
-        this.config = options.config;
-        
-        // Setup subviews
-        this.subview("th_row", new ThRow({ collection: this.collection }));
-        
-        if (this.needsFilterRow()) {
-            this.subview("filter_row", new FilterRow({ collection: this.collection }));
-        }
-        
-        // Listen for when offset is not zero
-        this.listenTo(this.config, "change:offset", function(model, offset){
-            var toggleClass = offset === 0 ? 'removeClass' : 'addClass' ;
-            this.$el[toggleClass]('overhang');
-        });
-    },
-    
-    template: '<div class="tr th-row"></div><div class="tr filter-row"></div>',
-    
-    render: function() {
-        this.$el.html(this.template);
-        this.assign({ '.th-row' : 'th_row' });
-        if (this.subview('filter_row')) {
-            this.assign({ '.filter-row' : 'filter_row' });
-        }
-        else this.$('.filter-row').remove();
-        return this;
-    },
-    
-    needsFilterRow: function() {
-        return this.collection.some(function(column){
-            return (typeof column.get('filter') !== 'undefined')
-        })
-    }
-    
-});
-exports = module.exports = Thead;
-},{"bassview":7}],5:[function(require,module,exports){
-var BaseView = require('bassview');
-
-var Trow = BaseView.extend({
-    
-    className: 'tr',
-    
-    initialize: function() {
-        this.listenTo(this.model, "change", this.render);
-    },
-    
-    render: function() {
-        this.trigger("clean_up");
-        this.$el.empty();
-        
-        this.collection.each(function(column){
-            var id = column.get('id');
-            var width = column.get('width');
-            var formatted = column.getFormatted(this.model);
-            var $view = $('<div class="td col-'+id+'" style="width:'+width+'px"><div class="cell-inner"></div></div>');
-            $view.find('.cell-inner').append(formatted);
-            this.$el.append($view);
-        }, this);
-        
-        return this;
-    }
-});
-
-
-
-var Tbody = BaseView.extend({
-    
-    initialize: function(options) {
-        this.columns = options.columns;
-        this.config = this.columns.config;
-        this.listenTo(this.collection, "reset", this.render);
-        this.listenTo(this.collection, "sort", this.render);
-        this.listenTo(this.collection, "update", this.render);
-        this.listenTo(this.config, "update", this.render);
-        this.listenTo(this.columns, "change:width", this.adjustColumnWidth );
-        this.listenTo(this.config, "change:offset", this.render);
-    },
-    
-    adjustColumnWidth: function(model, newWidth, options){
-        this.$('.td.col-'+model.get("id")).width(newWidth);
-    },
-    
-    // Renders the visible rows given the current offset and max_rows
-    // properties on the config object.
-    render: function() {
-        this.$el.empty();
-        this.trigger("clean_up");
-        var rows_to_render = this.config.getVisibleRows();
-        if (rows_to_render === false) return;
-        
-        rows_to_render.forEach(function(row){
-            var rowView = new Trow({
-                model: row,
-                collection: this.columns
-            });
-            this.$el.append( rowView.render().el );
-            rowView.listenTo(this, "clean_up", rowView.remove);
-        }, this);
-        this.trigger('rendered');
-        return this;
-    },
-    
-    events: {
-        "wheel": "onMouseWheel",
-        "mousewheel": "onMouseWheel"
-    },
-    
-    onMouseWheel: function(evt) {
-        // BigInteger
-        var self = this;
-        
-        // normalize webkit/firefox scroll values
-        var deltaY = -evt.originalEvent.wheelDeltaY || evt.originalEvent.deltaY * 100;
-        var movement = Math.round(deltaY / 100);
-        if (isNaN(movement)) return;
-        var origOffset = this.config.get("offset");
-        var limit = this.config.get("max_rows");
-        var offset = Math.min( this.collection.length - limit, Math.max( 0, origOffset + movement));
-        
-        this.config.set({"offset": offset}, {validate: true} );
-        
-        // Prevent default only when necessary
-        if (offset > 0 && offset < this.collection.length - limit) {
-            evt.preventDefault();
-            evt.originalEvent.preventDefault();
-        }
-    }
-    
-});
-exports = module.exports = Tbody;
-},{"bassview":7}],6:[function(require,module,exports){
-var BaseView = require('bassview');
-var Scroller = BaseView.extend({
-    
-    initialize: function(options) {
-        this.listenTo(this.model, "change:offset", this.updatePosition);
-        this.listenTo(options.tbody, "rendered", this.render);
-    },    
-    
-    template: '<div class="inner"></div>',
-    
-    render: function() {
-        this.$el.html(this.template);
-        this.updatePosition();
-        return this;
-    },
-    
-    updatePosition: function() {
-        var offset = this.model.get('offset');
-        var limit = this.model.get('max_rows');
-        var total = this.model.get('total_rows');
-        var actual_h = this.$el.parent().height();
-        var actual_r = actual_h / total;
-        var scroll_height = limit * actual_r;
-        if (scroll_height < 10) {
-            var correction = 10 - scroll_height;
-            actual_h -= correction;
-            actual_r = actual_h / total;
-        }
-        var scroll_top = offset * actual_r;
-        
-        if (scroll_height < actual_h && total > limit) {
-            this.$(".inner").css({
-                height: scroll_height,
-                top: scroll_top
-            });
-        } else {
-            this.$(".inner").hide();
-        }
-    },
-    
-    events: {
-        "mousedown .inner": "grabScroller"
-    },
-    
-    grabScroller: function(evt){
-        evt.preventDefault();
-        var self = this;
-        var mouseY = evt.clientY;
-        var offsetY = evt.offsetY;
-        var ratio = this.model.get('total_rows') / this.$el.parent().height();
-        var initOffset = self.model.get('offset');
-        
-        function moveScroller(evt){
-            var curMouse = evt.clientY;
-            var change = curMouse - mouseY;
-            var newOffset = Math.max(Math.round(ratio * change) + initOffset, 0);
-            newOffset = Math.min(newOffset, self.model.get('total_rows') - self.model.get('max_rows'))
-            self.model.set({'offset':newOffset}, {validate: true});
-        }
-        
-        function releaseScroller(evt){
-            $(window).off("mousemove", moveScroller);
-        }
-        
-        $(window).on("mousemove", moveScroller);
-        $(window).one("mouseup", releaseScroller);
-    }
-});
-
-exports = module.exports = Scroller
-},{"bassview":7}],11:[function(require,module,exports){
+},{"./lib/Column":3,"./lib/Thead":4,"./lib/Tbody":5,"./lib/Scroller":6,"underscore":7,"backbone":8,"bassview":9}],7:[function(require,module,exports){
 (function(){//     Underscore.js 1.4.4
 //     http://underscorejs.org
 //     (c) 2009-2013 Jeremy Ashkenas, DocumentCloud Inc.
@@ -2319,91 +1624,655 @@ exports = module.exports = Scroller
 
 })()
 },{}],10:[function(require,module,exports){
-var Bormats = require('bormat');
-exports.select = function(value, model) {
-    var select_key = 'selected';
-    var checked = model[select_key] === true;
-    var $ret = $('<div class="cell-inner"><input type="checkbox" class="selectbox"></div>');
-    
-    // Set checked
-    var $cb = $ret.find('input').prop('checked', checked);
-    
-    // Set click behavior
-    $cb
-    .on('click mousedown', function(evt){
-        evt.preventDefault();
-    })
-    .on('mouseup', function(evt) {
-        var selected = !! model[select_key];
-        var is_selected_now = model[select_key] = !selected;
-        $cb.prop('checked', is_selected_now);
-        model.trigger('change_selected', model, selected);
-    })
-    
-    return $ret;
+exports.like = function(term, value, computedValue, row) {
+    term = term.toLowerCase();
+    value = value.toLowerCase();
+    return value.indexOf(term) > -1;
 }
-
-var timeSince = Bormats.timeSince;
-
-exports.timeSince = function(value) {
-    if (/^\d+$/.test(value)) {
-        var newVal = timeSince(value) || "a moment";
-        return newVal + " ago";
+exports.is = function(term, value, computedValue, row) {
+    term = term.toLowerCase();
+    value = value.toLowerCase();
+    return term == value;
+}
+exports.number = function(term, value) {
+    value *= 1;
+    var first_two = term.substr(0,2);
+    var first_char = term[0];
+    var against_1 = term.substr(1)*1;
+    var against_2 = term.substr(2)*1;
+    if ( first_two == "<=" ) return value <= against_2 ;
+    if ( first_two == ">=" ) return value >= against_2 ;
+    if ( first_char == "<" ) return value < against_1 ;
+    if ( first_char == ">" ) return value > against_1 ;
+    if ( first_char == "~" ) return Math.round(value) == against_1 ;
+    if ( first_char == "=" ) return against_1 == value ;
+    return value.toString().indexOf(term.toString()) > -1 ;
+}
+},{}],11:[function(require,module,exports){
+exports.number = function(field){
+    return function(row1,row2) { 
+        return row1.get(field)*1 - row2.get(field)*1;
     }
-    return value;
 }
-
-exports.commaInt = Bormats.commaGroups;
-},{"bormat":13}],13:[function(require,module,exports){
-function timeSince(timestamp, compareDate, timeChunk) {
-    var now = compareDate === undefined ? +new Date() : compareDate;
-    var remaining = (timeChunk !== undefined) ? timeChunk : now - timestamp;
-    var string = "";
-    var separator = ", ";
-    var level = 0;
-    var max_levels = 3;
-    var milli_per_second = 1000;
-    var milli_per_minute = milli_per_second * 60;
-    var milli_per_hour = milli_per_minute * 60;
-    var milli_per_day = milli_per_hour * 24;
-    var milli_per_week = milli_per_day * 7;
-    var milli_per_month = milli_per_week * 4;
-    var milli_per_year = milli_per_day * 365;
-    
-    var levels = [
-    
-        { plural: "years", singular: "year", ms: milli_per_year },
-        { plural: "months", singular: "month", ms: milli_per_month },
-        { plural: "weeks", singular: "week", ms: milli_per_week },
-        { plural: "days", singular: "day", ms: milli_per_day },
-        { plural: "hours", singular: "hour", ms: milli_per_hour },
-        { plural: "minutes", singular: "minute", ms: milli_per_minute },
-        { plural: "seconds", singular: "second", ms: milli_per_second }
-    ];
-    
-    for (var i=0; i < levels.length; i++) {
-        if ( remaining < levels[i].ms ) continue;
-        level++;
-        var num = Math.floor( remaining / levels[i].ms );
-        var label = num == 1 ? levels[i].singular : levels[i].plural ;
-        string += num + " " + label + separator;
-        remaining %= levels[i].ms;
-        if ( level >= max_levels ) break;
-    };
-    
-    string = string.substring(0, string.length - separator.length);
-    return string;
+exports.string = function(field){
+    return function(row1,row2) { 
+        if ( row1.get(field).toString().toLowerCase() == row2.get(field).toString().toLowerCase() ) return 0;
+        return row1.get(field).toString().toLowerCase() > row2.get(field).toString().toLowerCase() ? 1 : -1 ;
+    }
 }
+},{}],3:[function(require,module,exports){
+var _ = require('underscore'), Backbone = require('backbone');
+var Filters = require("./Filters");
+var Sorts = require("./Sorts");
+var Formats = require("./Formats");
+var Column = Backbone.Model.extend({
+    
+    defaults: {
+        id: "",
+        key: "",
+        label: "",
+        sort: undefined,
+        filter: undefined,
+        format: undefined,
+        select: false,
+        filter_value: "",
+        sort_value: "",
+        lock_width: false
+    },
+    
+    initialize: function() {
+        // Check for filter
+        var filter = this.get("filter");
+        if (typeof filter === "string" && Filters.hasOwnProperty(filter)) {
+            this.set("filter", Filters[filter]);
+        }
+        
+        // Check for sort
+        var sort = this.get("sort");
+        if (typeof sort === "string" && Sorts.hasOwnProperty(sort)) {
+            this.set("sort", Sorts[sort](this.get("key")));
+        }
+        
+        // Check for format
+        var select = this.get('select');
+        var format = this.get('format');
+        if (select) {
+            this.set("format", Formats.select );
+            this.set("select_key", this.get("key"));
+        } else if (typeof format === "string" && typeof Formats[format] !== "undefined") {
+            this.set("format", Formats[format]);
+        }
+    },
+    
+    serialize: function() {
+        return this.toJSON();
+    },
+    
+    validate: function(attrs) {
+        
+        if (attrs.width < attrs.min_column_width) return "A column width cannot be => 0";
+        
+        if (attrs.lock_width === true && attrs.width > 0) return "This column has a locked width";
+        
+    },
+    
+    getKey: function(model) {
+        return model.get(this.get('key'));
+    },
+    
+    getFormatted: function(model) {
+        var fn = this.get('format');
+        return (typeof fn === "function")
+            ? fn(this.getKey(model), model)
+            : this.getKey(model);
+    },
+    
+    sortIndex: function(newIndex) {
+        var sorts = this.collection.col_sorts;
+        if (typeof newIndex === "undefined") return sorts.indexOf(this.get("id"));
+        
+        var curIdx = this.sortIndex();
+        var id = sorts.splice(curIdx, 1)[0];
+        sorts.splice(newIndex, 0, id);
+        this.collection.sort();
+    }
+    
+});
 
-function commaGroups(value) {
-    var parts = x.toString().split(".");
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    return parts.join(".");
-}
+var Columns = Backbone.Collection.extend({
+    
+    model: Column,
+    
+    initialize: function(models, options) {
+        this.config = options.config;
+        _.each(models, this.setMinWidth, this);
+        this.row_sorts = this.getInitialRowSorts(models);
+        this.col_sorts = this.getInitialColSorts(models);
+        this.on("change:sort_value", this.onSortChange);
+    },
+    
+    comparator: function(col1, col2) {
+        var idx1 = this.col_sorts.indexOf(col1.get("id"));
+        var idx2 = this.col_sorts.indexOf(col2.get("id"));
+        return idx1 - idx2;
+    },
+    
+    setMinWidth: function(model) {
+        if (model.hasOwnProperty('min_column_width')) return;
+        
+        model['min_column_width'] = this.config.get("min_column_width");
+    },
+    
+    getInitialRowSorts: function(models) {
+        var self = this;
+        var defaultSorts = _.pluck(models, "id");
+        var sorts;
+        if (this.config.get("row_sorts")) {
+            sorts = this.config.get("row_sorts");
+            if ( _.every(sorts, function(sort) { return defaultSorts.indexOf(sort) > -1 }) ) {
+                return sorts;
+            }
+        }
+        sorts = _.reduce(models,function(memo, column){ 
+            if (column['sort_value']) 
+                memo.push(column["id"]); 
+            
+            return memo;
+        },[]);
 
-exports.timeSince = timeSince;
-exports.commaGroups = commaGroups;
-},{}],12:[function(require,module,exports){
+        return sorts;
+    },
+    
+    getInitialColSorts: function(models) {
+        var self = this;
+        var defaultSorts = _.pluck(models, "id");
+        var sorts;
+        if (this.config.get("col_sorts")) {
+            sorts = this.config.get("col_sorts");
+            if ( ! (_.every(sorts, function(sort) { return defaultSorts.indexOf(sort) > -1 })) ) {
+                throw new Error("One or more values in the 'col_sorts' option does not match a column id");
+            }
+        } else {
+            sorts = defaultSorts;
+        }
+        return sorts;
+    },
+    
+    onSortChange: function(model, value) {
+        var id = model.get("id");
+        var index = this.row_sorts.indexOf(id);
+        if (index != -1) {
+            if (value === "") {
+                this.row_sorts.splice(index, 1);
+            }
+        } else {
+            this.row_sorts.push(id);
+        }
+        this.updateComparator();
+    },
+    
+    updateComparator: function() {
+        var comparator = false;
+        if (this.row_sorts.length !== 0){
+            var self = this;
+            var comparator = function(row1, row2) {
+                for (var i=0; i < self.row_sorts.length; i++) {
+                    var id = self.row_sorts[i];
+                    var column = self.get(id);
+                    var fn = column.get("sort");
+                    var value = column.get("sort_value");
+                    var sort_result = value == "a" ? fn(row1, row2) : fn(row2, row1) ;
+                    if (sort_result != 0) return sort_result;
+                };
+                return 0;
+            }
+        }
+        this.trigger("change:comparator", comparator);
+        
+    }
+    
+});
+
+exports.model = Column;
+exports.collection = Columns;
+},{"./Filters":10,"./Formats":12,"./Sorts":11,"underscore":7,"backbone":8}],5:[function(require,module,exports){
+var BaseView = require('bassview');
+
+var Trow = BaseView.extend({
+    
+    className: 'tr',
+    
+    initialize: function() {
+        this.listenTo(this.model, "change", this.render);
+    },
+    
+    render: function() {
+        this.trigger("clean_up");
+        this.$el.empty();
+        
+        this.collection.each(function(column){
+            var id = column.get('id');
+            var width = column.get('width');
+            var formatted = column.getFormatted(this.model);
+            var $view = $('<div class="td col-'+id+'" style="width:'+width+'px"><div class="cell-inner"></div></div>');
+            $view.find('.cell-inner').append(formatted);
+            this.$el.append($view);
+        }, this);
+        
+        return this;
+    }
+});
+
+
+
+var Tbody = BaseView.extend({
+    
+    initialize: function(options) {
+        this.columns = options.columns;
+        this.config = this.columns.config;
+        this.listenTo(this.collection, "reset", this.render);
+        this.listenTo(this.collection, "sort", this.render);
+        this.listenTo(this.collection, "update", this.render);
+        this.listenTo(this.config, "update", this.render);
+        this.listenTo(this.columns, "change:width", this.adjustColumnWidth );
+        this.listenTo(this.config, "change:offset", this.render);
+    },
+    
+    adjustColumnWidth: function(model, newWidth, options){
+        this.$('.td.col-'+model.get("id")).width(newWidth);
+    },
+    
+    // Renders the visible rows given the current offset and max_rows
+    // properties on the config object.
+    render: function() {
+        this.$el.empty();
+        this.trigger("clean_up");
+        var rows_to_render = this.config.getVisibleRows();
+        if (rows_to_render === false) return;
+        
+        rows_to_render.forEach(function(row){
+            var rowView = new Trow({
+                model: row,
+                collection: this.columns
+            });
+            this.$el.append( rowView.render().el );
+            rowView.listenTo(this, "clean_up", rowView.remove);
+        }, this);
+        this.trigger('rendered');
+        return this;
+    },
+    
+    events: {
+        "wheel": "onMouseWheel",
+        "mousewheel": "onMouseWheel"
+    },
+    
+    onMouseWheel: function(evt) {
+        // BigInteger
+        var self = this;
+        
+        // normalize webkit/firefox scroll values
+        var deltaY = -evt.originalEvent.wheelDeltaY || evt.originalEvent.deltaY * 100;
+        var movement = Math.round(deltaY / 100);
+        if (isNaN(movement)) return;
+        var origOffset = this.config.get("offset");
+        var limit = this.config.get("max_rows");
+        var offset = Math.min( this.collection.length - limit, Math.max( 0, origOffset + movement));
+        
+        this.config.set({"offset": offset}, {validate: true} );
+        
+        // Prevent default only when necessary
+        if (offset > 0 && offset < this.collection.length - limit) {
+            evt.preventDefault();
+            evt.originalEvent.preventDefault();
+        }
+    }
+    
+});
+exports = module.exports = Tbody;
+},{"bassview":9}],4:[function(require,module,exports){
+var _ = require('underscore');
+var BaseView = require('bassview');
+
+var ThCell = BaseView.extend({
+    
+    className: 'th',
+    
+    template: _.template('<div class="cell-inner" title="<%= label %>"><span class="th-header"><%= label %></span></div><% if(lock_width !== true) {%><span class="resize"></span><%}%>'),
+    
+    initialize: function() {
+        this.listenTo(this.model, "change:sort_value", this.render );
+        this.listenTo(this.model, "change:width", function(model, width) {
+            this.$el.width(width);
+        });
+    },
+    
+    render: function() {
+        var json = this.model.serialize();
+        var sort_class = json.sort_value ? (json.sort_value == "d" ? "desc" : "asc" ) : "" ;
+        this.$el
+            .removeClass('asc desc')
+            .addClass('col-'+json.id+" "+sort_class)
+            .width(json.width)
+            .html(this.template(json));
+        if (sort_class !== "") {
+            this.$(".th-header").prepend('<i class="'+sort_class+'-icon"></i> ');
+        }
+        return this;
+    },
+    
+    events: {
+        "mousedown .resize": "grabResizer",
+        "dblclick .resize": "fitToContent",
+        "mouseup .th-header": "changeColumnSort",
+        "mousedown": "grabColumn"
+    },
+    
+    grabResizer: function(evt) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        var self = this;
+        var mouseX = evt.clientX;
+        var columnWidth = this.model.get("width");
+        // Handler for when mouse is moving
+        var col_resize = function(evt) {
+            var column = self.model;
+            var change = evt.clientX - mouseX;
+            var newWidth = columnWidth + change;
+            if ( newWidth < column.get("min_column_width")) return;
+            column.set({"width": newWidth}, {validate: true});
+        }
+        var cleanup_resize = function(evt) {
+            $(window).off("mousemove", col_resize);
+        }
+        
+        $(window).on("mousemove", col_resize);
+        $(window).one("mouseup", cleanup_resize);
+    },
+    
+    fitToContent: function(evt) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        var new_width = 0;
+        var min_width = this.model.get('min_column_width');
+        var id = this.model.get('id');
+        var $ctx = this.$el.parents('.tabled').find('.tbody');
+        $(".td.col-"+id+" .cell-inner", $ctx).each(function(i, el){
+            new_width = Math.max(new_width,$(this).outerWidth(true), min_width);
+        });
+        this.model.set({'width':new_width},{validate: true});
+    },
+    
+    changeColumnSort: function(evt) {
+        
+        var model = this.model;
+        
+        if (typeof model.get("sort") !== "function" || model.get("moving") === true) return;
+        
+        var cur_sort = model.get("sort_value");
+        
+        if (!evt.shiftKey) {
+            // disable all sorts
+            model.collection.each(function(col){
+                if (col !== model) col.set({"sort_value": ""})
+            });
+        }
+        
+        switch(cur_sort) {
+            case "":
+                model.set("sort_value", "a");
+                break;
+            case "a":
+                model.set("sort_value", "d");
+                break;
+            case "d":
+                model.set("sort_value", "");
+                break;
+        }
+    },
+    
+    grabColumn: function(evt) {
+        evt.preventDefault();
+        evt.originalEvent.preventDefault();
+
+        var self = this;
+        var mouseX = evt.clientX;
+        var offsetX = evt.offsetX;
+        var thresholds = [];
+        var currentIdx = this.model.sortIndex();
+        var $tr = this.$el.parent();
+        $tr.find('.th').each(function(i,el){
+            var $this = $(this);
+            var offset = $this.offset().left;
+            var half = $this.width() / 2;
+            if (i != currentIdx) thresholds.push(offset+half);
+        });
+        var prevent_mouseup = false;
+        
+        var getNewIndex = function(pos) {
+            var newIdx = 0;
+            for (var i=0; i < thresholds.length; i++) {
+                var val = thresholds[i];
+                if (pos > val) newIdx++;
+                else return newIdx;
+            };
+            return newIdx;
+        }
+        
+        var drawHelper = function(newIdx) {
+            $tr.find('.colsort-helper').remove();
+            if (newIdx == currentIdx) return;
+            var method = newIdx < currentIdx ? 'before' : 'after';
+            $tr.find('.th:eq('+newIdx+')')[method]('<div class="colsort-helper"></div>');
+        }
+        
+        var move_column = function(evt) {
+            var curMouse = evt.clientX;
+            var change = curMouse - mouseX;
+            self.$el.css({'left':change, 'opacity':0.5, 'zIndex': 10});
+            
+            var newIdx = getNewIndex(curMouse, thresholds);
+            drawHelper(newIdx);
+            self.model.set('moving', true);
+        }
+        
+        var cleanup_move = function(evt) {
+            self.$el.css({'left': 0, 'opacity':1});
+            $tr.find('.colsort-helper').remove();
+            var curMouse = evt.clientX;
+            var change = curMouse - mouseX;
+            self.model.sortIndex(getNewIndex(curMouse, thresholds));
+            $(window).off("mousemove", move_column);
+            self.model.set('moving', false);
+        }
+        
+        $(window).on("mousemove", move_column);
+        $(window).one("mouseup", cleanup_move)
+    }
+});
+
+var ThRow = BaseView.extend({
+    
+    render: function() {
+        // clear it
+        this.$el.empty();
+        
+        // render each th cell
+        this.collection.each(function(column){
+            var view = new ThCell({ model: column });
+            this.$el.append( view.render().el )
+            view.listenTo(this, "clean_up", view.remove);
+        }, this);
+        return this;
+    }
+    
+});
+
+var FilterCell = BaseView.extend({
+    
+    initialize: function() {
+        this.listenTo(this.model, "change:width", function(column, width){
+            this.$el.width(width);
+        })
+    },
+    
+    template: '<div class="cell-inner"><input class="filter" type="search" placeholder="filter" /></div>',
+    
+    render: function() {
+        var fn = this.model.get('filter');
+        var markup = typeof fn === "function" ? this.template : "" ;
+        this.$el.addClass('td col-'+this.model.get('id')).width(this.model.get('width'));
+        this.$el.html(markup);
+        this.$("input").val(this.model.get('filter_value'));
+        return this;
+    },
+    
+    events: {
+        "click .filter": "updateFilter",
+        "keyup .filter": "updateFilterDelayed"
+    },
+    
+    updateFilter: function(evt) {
+        this.model.set('filter_value', $.trim(this.$('.filter').val()) );
+    },
+    
+    updateFilterDelayed: function(evt) {
+        if (this.updateFilterTimeout) clearTimeout(this.updateFilterTimeout)
+        this.updateFilterTimeout = setTimeout(this.updateFilter.bind(this, evt), 200);
+    }
+    
+});
+
+var FilterRow = BaseView.extend({
+    
+    render: function() {
+        // clear it
+        this.$el.empty();
+        this.trigger("clean_up")
+        
+        // render each th cell
+        this.collection.each(function(column){
+            var view = new FilterCell({ model: column });
+            this.$el.append( view.render().el );
+            view.listenTo(this, "clean_up", view.remove);
+        }, this);
+        return this;
+    }
+    
+});
+
+var Thead = BaseView.extend({
+    
+    initialize: function(options) {
+        // Set config
+        this.config = options.config;
+        
+        // Setup subviews
+        this.subview("th_row", new ThRow({ collection: this.collection }));
+        
+        if (this.needsFilterRow()) {
+            this.subview("filter_row", new FilterRow({ collection: this.collection }));
+        }
+        
+        // Listen for when offset is not zero
+        this.listenTo(this.config, "change:offset", function(model, offset){
+            var toggleClass = offset === 0 ? 'removeClass' : 'addClass' ;
+            this.$el[toggleClass]('overhang');
+        });
+    },
+    
+    template: '<div class="tr th-row"></div><div class="tr filter-row"></div>',
+    
+    render: function() {
+        this.$el.html(this.template);
+        this.assign({ '.th-row' : 'th_row' });
+        if (this.subview('filter_row')) {
+            this.assign({ '.filter-row' : 'filter_row' });
+        }
+        else this.$('.filter-row').remove();
+        return this;
+    },
+    
+    needsFilterRow: function() {
+        return this.collection.some(function(column){
+            return (typeof column.get('filter') !== 'undefined')
+        })
+    }
+    
+});
+exports = module.exports = Thead;
+},{"bassview":9,"underscore":7}],6:[function(require,module,exports){
+var BaseView = require('bassview');
+var Scroller = BaseView.extend({
+    
+    initialize: function(options) {
+        this.listenTo(this.model, "change:offset", this.updatePosition);
+        this.listenTo(options.tbody, "rendered", this.render);
+    },    
+    
+    template: '<div class="inner"></div>',
+    
+    render: function() {
+        this.$el.html(this.template);
+        this.updatePosition();
+        return this;
+    },
+    
+    updatePosition: function() {
+        var offset = this.model.get('offset');
+        var limit = this.model.get('max_rows');
+        var total = this.model.get('total_rows');
+        var actual_h = this.$el.parent().height();
+        var actual_r = actual_h / total;
+        var scroll_height = limit * actual_r;
+        if (scroll_height < 10) {
+            var correction = 10 - scroll_height;
+            actual_h -= correction;
+            actual_r = actual_h / total;
+        }
+        var scroll_top = offset * actual_r;
+        
+        if (scroll_height < actual_h && total > limit) {
+            this.$(".inner").css({
+                height: scroll_height,
+                top: scroll_top
+            });
+        } else {
+            this.$(".inner").hide();
+        }
+    },
+    
+    events: {
+        "mousedown .inner": "grabScroller"
+    },
+    
+    grabScroller: function(evt){
+        evt.preventDefault();
+        var self = this;
+        var mouseY = evt.clientY;
+        var offsetY = evt.offsetY;
+        var ratio = this.model.get('total_rows') / this.$el.parent().height();
+        var initOffset = self.model.get('offset');
+        
+        function moveScroller(evt){
+            var curMouse = evt.clientY;
+            var change = curMouse - mouseY;
+            var newOffset = Math.max(Math.round(ratio * change) + initOffset, 0);
+            newOffset = Math.min(newOffset, self.model.get('total_rows') - self.model.get('max_rows'))
+            self.model.set({'offset':newOffset}, {validate: true});
+        }
+        
+        function releaseScroller(evt){
+            $(window).off("mousemove", moveScroller);
+        }
+        
+        $(window).on("mousemove", moveScroller);
+        $(window).one("mouseup", releaseScroller);
+    }
+});
+
+exports = module.exports = Scroller
+},{"bassview":9}],8:[function(require,module,exports){
 (function(){//     Backbone.js 1.0.0
 
 //     (c) 2010-2013 Jeremy Ashkenas, DocumentCloud Inc.
@@ -3977,5 +3846,173 @@ exports.commaGroups = commaGroups;
 }).call(this);
 
 })()
-},{"underscore":11}]},{},[1])
+},{"underscore":7}],9:[function(require,module,exports){
+(function(){var _ = require('underscore'), Backbone = require('backbone');
+var BassView = Backbone.View.extend({
+    
+    // Assigns a view to a jquery selector in this view's element.
+    // the second parameter may be an actual backbone view, or a 
+    // key for a registered subview via the subview() method below.
+    assign : function (selector, view) {
+        var selectors;
+        if (_.isObject(selector)) {
+            selectors = selector;
+        }
+        else {
+            selectors = {};
+            selectors[selector] = view;
+        }
+        if (!selectors) return;
+        _.each(selectors, function (view, selector) {
+            if (typeof view === "string") view = this.__subviews__[view];
+            view.setElement(this.$(selector)).render();
+        }, this);
+    },
+    
+    // Triggers a custom event that can be listened for 
+    // by subviews etc. Also unbinds events to prevent
+    // detached DOM elements.
+    remove: function () {
+        this.trigger("clean_up");
+        this.unbind();
+        Backbone.View.prototype.remove.call(this);
+    },
+    
+    // Registers or retrieves a subview of this view.
+    // The main thing here is to automate the process of
+    // having subviews listen to their parents for clean_up.
+    subview: function(key, view){
+        // Set up subview object
+        var sv = this.__subviews__ = this.__subviews__ || {};
+        
+        // Check if getting
+        if (view === undefined) return sv[key];
+        
+        // Add listener for removal event
+        view.listenToOnce(this, "clean_up", function() {
+            view.remove();
+            delete sv[key];
+        });
+        
+        // Set the key
+        sv[key] = view;
+        
+        // Allow chaining
+        return view
+    }
+    
+});
+
+exports = module.exports = BassView
+})()
+},{"backbone":8,"underscore":7}],12:[function(require,module,exports){
+var Bormats = require('bormat');
+exports.select = function(value, model) {
+    var select_key = 'selected';
+    var checked = model[select_key] === true;
+    var $ret = $('<div class="cell-inner"><input type="checkbox" class="selectbox"></div>');
+    
+    // Set checked
+    var $cb = $ret.find('input').prop('checked', checked);
+    
+    // Set click behavior
+    $cb
+    .on('click mousedown', function(evt){
+        evt.preventDefault();
+    })
+    .on('mouseup', function(evt) {
+        var selected = !! model[select_key];
+        var is_selected_now = model[select_key] = !selected;
+        $cb.prop('checked', is_selected_now);
+        model.trigger('change_selected', model, selected);
+    })
+    
+    return $ret;
+}
+
+var timeSince = Bormats.timeSince;
+
+exports.timeSince = function(value) {
+    if (/^\d+$/.test(value)) {
+        var newVal = timeSince(value) || "a moment";
+        return newVal + " ago";
+    }
+    return value;
+}
+
+exports.commaInt = Bormats.commaGroups;
+},{"bormat":13}],13:[function(require,module,exports){
+var _ = require('underscore');
+function timeSince(timeStamp, options) {
+    if (typeof timeStamp === "object") {
+        options = timeStamp;
+        timeStamp = undefined;
+    }
+    options = options || {};
+    _.defaults(options, {
+        compareDate: +new Date(),
+        timeChunk: undefined,
+        maxUnit: "year",
+        unixUptime: false,
+        max_levels: 3,
+        timeStamp: timeStamp || 0
+    });
+    var remaining = (options.timeChunk !== undefined) ? options.timeChunk : options.compareDate - options.timeStamp;
+    var string = "";
+    var separator = ", ";
+    var level = 0;
+    var max_levels = options.max_levels;
+    var milli_per_second = 1000;
+    var milli_per_minute = milli_per_second * 60;
+    var milli_per_hour = milli_per_minute * 60;
+    var milli_per_day = milli_per_hour * 24;
+    var milli_per_week = milli_per_day * 7;
+    var milli_per_month = milli_per_week * 4;
+    var milli_per_year = milli_per_day * 365;
+    
+    if (options.unixUptime) {
+        var days = Math.floor(remaining / milli_per_day);
+        remaining -= days*milli_per_day;
+        var hours = Math.floor(remaining / milli_per_hour);
+        remaining -= hours*milli_per_hour;
+        var minutes = Math.round(remaining / milli_per_minute);
+        string = days + " days, " + hours.toString() + ":" + (minutes < 10 ? "0" : "") + minutes.toString()
+    } else {
+        var levels = [
+            { plural: "years", singular: "year", ms: milli_per_year },
+            { plural: "months", singular: "month", ms: milli_per_month },
+            { plural: "weeks", singular: "week", ms: milli_per_week },
+            { plural: "days", singular: "day", ms: milli_per_day },
+            { plural: "hours", singular: "hour", ms: milli_per_hour },
+            { plural: "minutes", singular: "minute", ms: milli_per_minute },
+            { plural: "seconds", singular: "second", ms: milli_per_second }
+        ];
+
+        var crossedThreshold = false;
+        for (var i=0; i < levels.length; i++) {
+            if ( options.maxUnit === levels[i].singular ) crossedThreshold = true;
+            if ( remaining < levels[i].ms || !crossedThreshold ) continue;
+            level++;
+            var num = Math.floor( remaining / levels[i].ms );
+            var label = num == 1 ? levels[i].singular : levels[i].plural ;
+            string += num + " " + label + separator;
+            remaining %= levels[i].ms;
+            if ( level >= max_levels ) break;
+        };
+        string = string.substring(0, string.length - separator.length);
+    }
+    
+    
+    return string;
+}
+
+function commaGroups(value) {
+    var parts = value.toString().split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return parts.join(".");
+}
+
+exports.timeSince = timeSince;
+exports.commaGroups = commaGroups;
+},{"underscore":7}]},{},[1])
 ;

@@ -1,4 +1,5 @@
 var Tabled = require('../../');
+var _ = require('underscore'), Backbone = require('backbone');
 var columns = [
     { id: "name", key: "name", label: "Name" },
     { id: "age", key: "age", label: "Age" }
