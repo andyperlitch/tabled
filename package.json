@@ -1,46 +1,55 @@
 {
-    "name": "tabled",
-    "version": "0.1.8",
-    "description": "Backbone UI component for building interactive tables.",
-    "main": "index.js",
-    "scripts": {
-        "test": "mocha test/*.js"
+  "name": "tabled",
+  "version": "0.1.9",
+  "description": "Backbone UI component for building interactive tables.",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha test/*.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:andyperlitch/tabled.git"
+  },
+  "keywords": [
+    "backbone",
+    "ui",
+    "table"
+  ],
+  "author": "andy perlitch",
+  "license": "BSD",
+  "readmeFilename": "README.md",
+  "devDependencies": {
+    "mocha": "",
+    "sinon": "",
+    "beefy": ""
+  },
+  "dependencies": {
+    "browserify": ">=2.12.0",
+    "bormat": ">=0.0.7",
+    "bassview": ">=0.0.5",
+    "underscore": ">=1.4.3",
+    "backbone": ">=1.0.0",
+    "ktbr": ">=0.0.3"
+  },
+  "testling": {
+    "files": "test/suite.js",
+    "browsers": {
+      "chrome": [
+        20,
+        27
+      ],
+      "safari": [
+        5.1
+      ],
+      "firefox": [
+        13
+      ]
     },
-    "repository": {
-        "type": "git",
-        "url": "git@github.com:andyperlitch/tabled.git"
-    },
-    "keywords": [
-        "backbone",
-        "ui",
-        "table"
-    ],
-    "author": "andy perlitch",
-    "license": "BSD",
-    "readmeFilename": "README.md",
-    "devDependencies": {
-        "mocha": "",
-        "sinon": "",
-        "beefy": ""
-    },
-    "dependencies": {
-        "browserify": ">=2.12.0",
-        "bormat": ">=0.0.7",
-        "bassview": ">=0.0.5",
-        "underscore": ">=1.4.3",
-        "backbone": ">=1.0.0",
-        "ktbr": ">=0.0.3"
-    },
-    "testling": {
-        "files": "test/suite.js",
-        "browsers": {
-            "chrome": [ 20, 27 ],
-            "safari": [ 5.1 ],
-            "firefox": [ 13 ]
-        },
-        "harness": "mocha"
-    },
-    "browserify": {
-        "transform": ["ktbr"]
-    }
+    "harness": "mocha"
+  },
+  "browserify": {
+    "transform": [
+      "ktbr"
+    ]
+  }
 }
