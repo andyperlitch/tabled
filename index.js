@@ -57,7 +57,7 @@ var ConfigModel = Backbone.Model.extend({
         var prev_total = this.get('total_rows')*1;
         if (total !== prev_total) {
             this.set('total_rows', total)
-            var newOffset = Math.min(total - limit, offset);
+            var newOffset = Math.max(0, Math.min(total - limit, offset));
             if (newOffset === offset) this.trigger('update');
             else this.set('offset', newOffset);
             
