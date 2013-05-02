@@ -141,6 +141,7 @@ var Tabled = BaseView.extend({
     ].join(""),
     
     render: function() {
+        this.lockHeight();
         // Set initial markup
         this.$el.html(this.template);
         // Set the widths of the columns
@@ -151,8 +152,18 @@ var Tabled = BaseView.extend({
             '.tbody': 'tbody',
             '.scroller': 'scroller'
         });
+        this.unlockHeight();
         
         return this;
+    },
+    
+    lockHeight: function() {
+        // Lock height to prevent scrollbar craziness
+        this.$el.css({'height':this.$el.height()+'px'});
+    },
+    
+    unlockHeight: function() {
+        this.$el.css({'height':'auto'});
     },
     
     renderBody: function(){
