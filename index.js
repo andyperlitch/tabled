@@ -179,11 +179,12 @@ var Tabled = BaseView.extend({
         });
     },
     
-    onWidthChange: function(){
+    onWidthChange: function(model, value, options){
         this.adjustInnerDiv();
         
         // Save the widths
         if (!this.config.get("save_state")) return;
+        if (options.save_state === false) return;
         var widths = this.columns.reduce(function(memo, column, key){
             memo[column.get('id')] = column.get('width');
             return memo;
@@ -231,7 +232,7 @@ var Tabled = BaseView.extend({
         var defaultWidth = Math.max(Math.floor(avg_width), this.config.get("min_column_width")) ;
         makeDefault.forEach(function(column, key){
             var width = Math.max(defaultWidth, column.get('min_column_width') || defaultWidth);
-            column.set('width', width);
+            column.set({'width': width},{save_state:false});
             adjustedWidth += width;
         });
         this.$('.tabled-inner').width(adjustedWidth);
