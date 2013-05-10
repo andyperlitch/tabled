@@ -322,7 +322,7 @@ var Tabled = BaseView.extend({
                 var col = this.columns.get(key);
                 if (col) col.set('width', val);
                 else {
-                    list.splice(key, 1);
+                    delete list[key];
                     this.state('column_widths', list);
                 }
             }, this);
