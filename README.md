@@ -29,6 +29,11 @@ Backbone UI component for building interactive tables.
     table.$el.appendTo($my_el);
     table.setElement(".some-element");
 
+##Installation
+
+    npm install tabled
+    
+
 ##Options
 
 There are several special options you can pass to Tabled besides the collection and columns:
