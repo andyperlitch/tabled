@@ -243,7 +243,7 @@ var Tabled = BaseView.extend({
             var width = column.get('width') || column.get('min_column_width');
             return memo*1 + width*1;
         }, 0);
-        this.$('.tabled-inner').width(width);
+        this.$('.tabled-inner').width(width+1); // +1 for firefox!
     },
     
     events: {
