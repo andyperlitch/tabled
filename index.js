@@ -296,7 +296,7 @@ var Tabled = BaseView.extend({
     },
     
     resizeTableToCtnr: function() {
-        var newWidth = this.$el.parent().width();
+        var newWidth = this.$el.parent().width() - 1; // -1 for firefox!
         var curWidth = this.$('.tabled').width();
         var delta = newWidth - curWidth;
         var resizableColCount = this.columns.reduce(function(memo, column) {
