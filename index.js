@@ -83,7 +83,7 @@ var Tabled = BaseView.extend({
     initialize: function(options) {
 
         // Ensure that this.collection (the data) is a backbone collection
-        if ( !(this.collection instanceof Backbone.Collection) ) throw new Error("Tabled must be provided with a backbone collection as its data");
+        // if ( !(this.collection instanceof Backbone.Collection) ) throw new Error("Tabled must be provided with a backbone collection as its data");
         
         // Config object
         this.config = new ConfigModel(this.options);
