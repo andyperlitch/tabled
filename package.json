@@ -48,8 +48,6 @@
     "harness": "mocha"
   },
   "browserify": {
-    "transform": [
-      "ktbr"
-    ]
+    "transform": "ktbr"
   }
 }
