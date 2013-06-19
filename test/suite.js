@@ -256,7 +256,19 @@ describe("the Tabled module", function() {
             assert.equal($(".tbody .tr").length, 1, "did not filter the rows down to 1");
         });
         
-        it("should emit a sort event when the header is clicked", function(done){
+        it("should emit a sort event when the header is clicked (mousedown, mouseup)", function(done){
+            this.collection.on("sort", function() {
+                assert(true);
+                done();
+            });
+            var vent1 = $.Event("mousedown", {});
+            var vent2 = $.Event("mouseup", {});
+            var $header = $(".th-header:eq(4)", this.$pg);
+            $header.trigger(vent1);
+            $header.trigger(vent2);
+        });
+        
+        it("should only fire one sort event when the header is clicked", function(done) {
             this.collection.on("sort", function() {
                 assert(true);
                 done();
@@ -264,6 +276,9 @@ describe("the Tabled module", function() {
             var vent = $.Event("mouseup");
             var $header = $(".th-header:eq(4)", this.$pg);
             $header.trigger(vent);
+        });
+        
+        it("should not fire a sort event if the absolute value of the column change is greater than 8", function() {
             
         });
         
