@@ -270,7 +270,7 @@ var Tabled = BaseView.extend({
         // Vertical 
         var mouseY = evt.clientY;
         var row_height = $(".tr", this.$el).height();
-        var initMax = this.config.get('max_rows');
+        var initMax = Math.max(1, Math.min(this.config.get('max_rows'), this.collection.length));
         
         var table_resize = function(evt){
             // Horizontal
