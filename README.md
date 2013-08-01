@@ -147,7 +147,7 @@ The cells in that column will be checkboxes that, when checked or unchecked, wil
     // ...in column definitions...
     { id: "selector", select: true, key: "selected" , label: "" }
     
-Each row of data will have a column with a checkbox, and when one is clicked, the model's `selected` attribute will be changed to true (or false if unchecking), eg. model.set('selected', true);
+Each row of data will have a column with a checkbox, and when one is clicked, the model's `selected` attribute will be changed to true (or false if unchecking), eg. `model.set('selected', true);` Keep in mind, each row needs to have an id or an idAttribute.
 
 ###`interaction` (optional)
 
