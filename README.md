@@ -133,11 +133,10 @@ This function should return true if the row should be included in the filtered s
 
 ###`format` (optional)
 
-`Function` or `String` If a function, it should return a string, DOM element, or jQuery object to be used as the value of the row. Receives the value of `model.get(column.key)` and the model itself as arguments:
+`Function` or `String` If a function, it should return a string to be used as the value of the row. Receives the value of `model.get(column.key)` and the model itself as arguments:
 
     format: function(value, model) {
-        // return something here
-        // note: under the hood, this value is added with $().append()
+        // return string here
     }
 
 If it is a string, it should be one of the predefined formatting functions:
@@ -149,6 +148,19 @@ The cells in that column will be checkboxes that, when checked or unchecked, wil
     { id: "selector", select: true, key: "selected" , label: "" }
     
 Each row of data will have a column with a checkbox, and when one is clicked, the model's `selected` attribute will be changed to true (or false if unchecking), eg. model.set('selected', true);
+
+###`interaction` (optional)
+
+`Object` This allows you to add event handling to individual cells. The structure of the object should be as follows:
+
+    {
+        '[SELECTOR_STRING]': function(evt) {
+            // the context (this) of this function is
+            // the actual table view, from which you may
+            // access the data with this.collection and 
+            // access the column with this.columns
+        }
+    }
 
 ##Examples
 

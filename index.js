@@ -246,9 +246,18 @@ var Tabled = BaseView.extend({
         this.$('.tabled-inner').width(width+1); // +1 for firefox!
     },
     
-    events: {
-        'mousedown .resize-table': 'grabTableResizer',
-        'dblclick .resize-table':  'resizeTableToCtnr'
+    events: function() {
+        var default_events = {
+            'mousedown .resize-table': 'grabTableResizer',
+            'dblclick .resize-table':  'resizeTableToCtnr'
+        }
+            
+        // Look for interactions provided by columns
+        var interactions = _.filter(this.columns.pluck('interaction'), function(ixn) { return ixn !== undefined; });
+        _.extend.apply(default_events, [default_events].concat(interactions));
+        
+        return default_events; 
+        
     },
     
     
