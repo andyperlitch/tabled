@@ -168,9 +168,13 @@ To run the examples, do the following:
 
     npm install .
     jam install
-    make all
+    make examples
     
 Then, simply view the index.html page of the example you want to see in a browser.
+
+##Standalone (without browserify)
+
+If you are not using browserify, you may use the standalone version that assumes Backbone and underscore (_) are in the global namespace. The standalone version of Tabled is located in `./standalone/tabled.js`. The minified version is `./standalone/tabled.min.js`. Simply include this in a script tag on your page after including jQuery (zepto), Underscore (lodash), and Backbone.
 
 ##TODO
 
