@@ -3,16 +3,16 @@
     <head>
         <meta charset="utf-8">
         <title>Tabled: No Browserify</title>
-        <link rel="stylesheet" href="tabled.css" media="screen" >
+        <link rel="stylesheet" href="../tabled.css" media="screen" >
     </head>
     <body>
         
         <div id="playground"></div>
         
-        <script src="vendor/jquery/dist/jquery.js"></script>
-        <script src="vendor/underscore/underscore.js"></script>
-        <script src="vendor/backbone/backbone.js"></script>
-        <script src="standalone/tabled.js"></script>
+        <script src="../vendor/jquery/dist/jquery.js"></script>
+        <script src="../vendor/underscore/underscore.js"></script>
+        <script src="../vendor/backbone/backbone.js"></script>
+        <script src="../standalone/tabled.js"></script>
         <script type="text/javascript">
             function inches2feet(inches, model){
                 var feet = Math.floor(inches/12);
@@ -101,7 +101,7 @@
                 // var endTime = +new Date();
                 // console.log((endTime - startTime)/1000);
                 if (method === 'set') collection.trigger('update');
-            }, 3000);
+            }, 2000);
         </script>
     </body>
 </html>
