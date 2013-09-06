@@ -21,7 +21,8 @@
   "devDependencies": {
     "mocha": "",
     "sinon": "",
-    "beefy": ""
+    "beefy": "",
+    "uglifyjs": "~2.3.6"
   },
   "dependencies": {
     "browserify": ">=2.12.0",

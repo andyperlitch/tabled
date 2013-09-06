@@ -1,0 +1,9 @@
+(function(){
+    function require(module) {
+        if (module === '7/u9/g') {
+            return Backbone;
+        }
+        if (module === 'XqG2h/') {
+            return _;
+        }
+    }
