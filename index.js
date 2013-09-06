@@ -33,7 +33,7 @@ var ConfigModel = Backbone.Model.extend({
             return "Offset must be greater than 0";
         }
         if (attrs.max_rows < 1) {
-            return "max_rows must atleast 1";
+            return "max_rows must at least be 1";
         }
     },
     getVisibleRows: function() {
@@ -260,8 +260,6 @@ var Tabled = BaseView.extend({
         
     },
     
-    
-    
     grabTableResizer: function(evt){
         evt.preventDefault();
         evt.stopPropagation();
@@ -293,7 +291,7 @@ var Tabled = BaseView.extend({
             var abChangeY = Math.abs(changeY);
             if ( abChangeY > row_height) {
                 abChangeY = Math.floor(abChangeY/row_height) * (changeY > 0 ? 1 : -1);
-                self.config.set({'max_rows':initMax + abChangeY}, {validate:true});
+                self.config.set({'max_rows':initMax + abChangeY}, { validate: true });
             }
         } 
         var cleanup_resize = function(evt) {
