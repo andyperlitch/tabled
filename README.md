@@ -154,13 +154,25 @@ Each row of data will have a column with a checkbox, and when one is clicked, th
 `Object` This allows you to add event handling to individual cells. The structure of the object should be as follows:
 
     {
-        '[SELECTOR_STRING]': function(evt) {
-            // the context (this) of this function is
-            // the actual table view, from which you may
-            // access the data with this.collection and 
-            // access the column with this.columns
-        }
+       '[SELECTOR_STRING]': function(evt) {
+           // the context (this) of this function is
+           // the actual table view, from which you may
+           // access the data with this.collection and 
+           // access the column with this.columns
+		},
+		[...]	
     }
+	
+Where `[SELECTOR_STRING]` is an event key in the same format as keys in the Backbone.View.events map. For example:
+
+	{
+	   'click': function(evt) {
+	       console.log('cell was clicked!');
+		},
+		'hover .tooltip': function(evt) {
+			// Gets triggered when hover over the .tooltip element in the cell
+		}	
+	}
 
 ##Examples
 
