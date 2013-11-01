@@ -6,7 +6,7 @@ examples:
 	./node_modules/.bin/browserify ./examples/example3/start.js -o ./examples/example3/bundle.js
 	./node_modules/.bin/browserify ./examples/example4/start.js -o ./examples/example4/bundle.js --debug
 nobr:
-	./node_modules/.bin/browserify nobr.js -x node_modules/backbone -x node_modules/underscore > standalone/tabled.js
+	./node_modules/.bin/browserify nobr.js -x backbone -x underscore > standalone/tabled.js
 	node ./standalone/wrapStandalone.js
 	uglifyjs standalone/tabled.js -o standalone/tabled.min.js
 livetest:

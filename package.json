@@ -27,7 +27,7 @@
   "dependencies": {
     "browserify": "~2.35.0",
     "bormat": "0.0.9",
-    "bassview": "0.0.6",
+    "bassview": "~0.1.0",
     "underscore": "~1.5.2",
     "backbone": "~1.1.0",
     "ktbr": ">=0.0.3"
