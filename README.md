@@ -1,8 +1,6 @@
 Tabled
 ======
 
-[![browser support](https://ci.testling.com/USER/PROJECT.png)](https://ci.testling.com/USER/PROJECT)
-
 Backbone UI component for building interactive tables.
 
 ##Usage
@@ -183,6 +181,11 @@ To run the examples, do the following:
     make examples
     
 Then, simply view the index.html page of the example you want to see in a browser.
+
+## A Note on Rendering
+
+Due to performance, rows are not rendered individually, but instead, all visible rows are rendered all in one shot. When any of the following events are triggered on the data collection, the rows are rendered: `reset`, `sort`, `sync`, `tabled:update`. As long as you set an initial sort order on the table, it should update as expected. However, there is much room for improvement on this part of Tabled. Hopefully in future versions I'll be able to make this more intuitive and easier to use.
+
 
 ##Standalone (without browserify)
 
