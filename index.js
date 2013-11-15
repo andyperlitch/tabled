@@ -113,9 +113,13 @@ var Tabled = BaseView.extend({
         
         // Listeners
         this.listenTo(this.columns, "change:width", this.onWidthChange );
-        this.listenTo(this.columns, "change:filter_value", function(){
+        this.listenTo(this.columns, "change:filter_value", function(model, attr){
             this.config.set("offset", 0);
             this.renderBody();
+            var column_filters = this.columns.map(function(col) {
+                return { id: col.get('id'), filter_value: col.get('filter_value')};
+            });
+            this.state('column_filters', column_filters);
         });
         this.listenTo(this.config, "change:max_rows", this.onMaxRowChange);
         this.listenTo(this.columns, "change:comparator", this.updateComparator);
@@ -344,6 +348,20 @@ var Tabled = BaseView.extend({
         ) {
             this.columns.col_sorts = colsorts;
             this.columns.sort();
+        }
+
+        // Check for column filters
+        var colfilters = this.state('column_filters');
+        if (
+            colfilters !== undefined &&
+            colfilters.length === this.columns.length
+        ) {
+            _.each(colfilters, function(filter) {
+                var column = this.columns.get(filter.id);
+                if (column) {
+                    column.set('filter_value', filter.filter_value);
+                }
+            }, this);
         }
         
         // Check for max_rows
