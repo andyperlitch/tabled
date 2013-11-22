@@ -1,6 +1,6 @@
 {
   "name": "tabled",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "Backbone UI component for building interactive tables.",
   "main": "index.js",
   "scripts": {
